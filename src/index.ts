@@ -1,5 +1,5 @@
 // src/index.ts
-import 'dotenv/config'; // <-- ADDED: Load environment variables first
+import 'dotenv/config';
 
 import {
   Client,
@@ -18,16 +18,11 @@ import * as tokenCmd from './commands/token';
 import * as balanceCmd from './commands/balance';
 import * as auditCmd from './commands/audit';
 
-// 🔹 Start the web server (Express + OAuth)
-import './web/server';
-
 type Command = {
   data: { name: string; toJSON: () => unknown };
   execute: (i: ChatInputCommandInteraction) => Promise<void>;
   autocomplete?: (i: AutocompleteInteraction) => Promise<void>;
-  autocomplete2?: (i: AutocompleteInteraction) => Promise<void>;
   handleComponent?: (i: Interaction) => Promise<boolean>;
-  handleComponent2?: (i: Interaction) => Promise<boolean>;
 };
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
@@ -73,7 +68,6 @@ client.on('interactionCreate', async (interaction) => {
     if (interaction.isAutocomplete()) {
       const cmd = commands.get(interaction.commandName);
       if (cmd?.autocomplete) await cmd.autocomplete(interaction);
-      else if (cmd?.autocomplete2) await cmd.autocomplete2(interaction);
       return;
     }
 
@@ -83,7 +77,6 @@ client.on('interactionCreate', async (interaction) => {
     ) {
       for (const cmd of commands.values()) {
         if (cmd.handleComponent && (await cmd.handleComponent(interaction))) return;
-        if (cmd.handleComponent2 && (await cmd.handleComponent2(interaction))) return;
       }
     }
 
