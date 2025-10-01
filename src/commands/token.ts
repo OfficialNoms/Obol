@@ -1,3 +1,4 @@
+// src/commands/token.ts
 import {
   SlashCommandBuilder,
   ChatInputCommandInteraction,
@@ -15,6 +16,7 @@ import {
   TextInputBuilder,
   TextInputStyle,
   Interaction,
+  MessageFlags,
 } from 'discord.js';
 import { resolveGameFlexible, listGames, getGameById } from '../services/game';
 import {
@@ -29,6 +31,7 @@ import { mutationEmbed, ok, err } from '../ui/embeds';
 import { CONFIG } from '../config';
 import { isGameManager, isGranter } from '../permissions';
 
+// ---- Slash command with existing subs + interactive panel ----
 export const data = new SlashCommandBuilder()
   .setName('token')
   .setDescription('Grant / manage per-game RP tokens')
@@ -110,7 +113,7 @@ export const data = new SlashCommandBuilder()
   )
   .setDefaultMemberPermissions(PermissionFlagsBits.SendMessages);
 
-// Autocomplete
+// ---- Autocomplete ----
 export async function autocomplete(interaction: AutocompleteInteraction) {
   if (!interaction.inGuild() || !interaction.guild) return;
   const focused = interaction.options.getFocused().trim();
@@ -128,7 +131,7 @@ export async function autocomplete(interaction: AutocompleteInteraction) {
   );
 }
 
-// Panel state
+// ---- Panel state ----
 type PanelState = { gameId?: number; userId?: string };
 const panel = new Map<string, PanelState>();
 
@@ -162,7 +165,7 @@ function actionButtonsRow() {
   return new ActionRowBuilder<ButtonBuilder>().addComponents(grant, remove, set);
 }
 
-// Modal: show full context in title; inputs: Amount + Reason/Notes
+// Modal with context
 function amountModal(customId: string, title: string, gameName: string, targetLabel?: string) {
   const fullTitle = targetLabel ? `${title} — ${gameName} → ${targetLabel}` : `${title} — ${gameName}`;
   const modal = new ModalBuilder().setCustomId(customId).setTitle(fullTitle);
@@ -188,9 +191,10 @@ function amountModal(customId: string, title: string, gameName: string, targetLa
   return modal;
 }
 
+// ---- Slash executor ----
 export async function execute(interaction: ChatInputCommandInteraction) {
   if (!interaction.inGuild() || !interaction.guild) {
-    await interaction.reply({ embeds: [err('Guild-only command')], ephemeral: true });
+    await interaction.reply({ embeds: [err('Guild-only command')], flags: MessageFlags.Ephemeral });
     return;
   }
 
@@ -201,19 +205,19 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     await interaction.reply({
       embeds: [ok('Obol — Token Panel', 'Pick a game and a member, then choose an action.')],
       components: [gameSelectRow(interaction.guild.id), userSelectRow(), actionButtonsRow()],
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
     return;
   }
 
-  // Standard subcommands
+  // Normal subcommands
   const gameInput = interaction.options.getString('game', true);
   const game =
     (/^\d+$/.test(gameInput)
       ? getGameById(interaction.guild.id, Number(gameInput))
       : resolveGameFlexible(interaction.guild.id, gameInput)) ?? undefined;
   if (!game) {
-    await interaction.reply({ embeds: [err('Game not found')], ephemeral: true });
+    await interaction.reply({ embeds: [err('Game not found')], flags: MessageFlags.Ephemeral });
     return;
   }
 
@@ -225,7 +229,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
 
   if (sub === 'grant' || sub === 'remove') {
     if (!granter) {
-      await interaction.reply({ embeds: [err('No permission')], ephemeral: true });
+      await interaction.reply({ embeds: [err('No permission')], flags: MessageFlags.Ephemeral });
       return;
     }
     const user = interaction.options.getUser('member', true) as User;
@@ -242,7 +246,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
         beforeAfter = removeTokens(interaction.guild.id, game.id, interaction.user.id, user.id, amount, reason);
       }
     } catch (e) {
-      await interaction.reply({ embeds: [err('Failed', String((e as Error).message))], ephemeral: true });
+      await interaction.reply({ embeds: [err('Failed', String((e as Error).message))], flags: MessageFlags.Ephemeral });
       return;
     }
 
@@ -258,14 +262,14 @@ export async function execute(interaction: ChatInputCommandInteraction) {
           note: reason,
         }),
       ],
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
     return;
   }
 
   if (sub === 'set') {
     if (!manager) {
-      await interaction.reply({ embeds: [err('Managers only')], ephemeral: true });
+      await interaction.reply({ embeds: [err('Managers only')], flags: MessageFlags.Ephemeral });
       return;
     }
     const user = interaction.options.getUser('member', true) as User;
@@ -277,7 +281,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     try {
       beforeAfter = setTokens(interaction.guild.id, game.id, interaction.user.id, user.id, amount, reason);
     } catch (e) {
-      await interaction.reply({ embeds: [err('Failed', String((e as Error).message))], ephemeral: true });
+      await interaction.reply({ embeds: [err('Failed', String((e as Error).message))], flags: MessageFlags.Ephemeral });
       return;
     }
     await interaction.reply({
@@ -292,28 +296,28 @@ export async function execute(interaction: ChatInputCommandInteraction) {
           note: reason,
         }),
       ],
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
     return;
   }
 
   if (sub === 'balance') {
     if (!granter && !manager) {
-      await interaction.reply({ embeds: [err('Restricted')], ephemeral: true });
+      await interaction.reply({ embeds: [err('Restricted')], flags: MessageFlags.Ephemeral });
       return;
     }
     const user = interaction.options.getUser('member', true) as User;
     const bal = getBalance(interaction.guild.id, game.id, user.id);
     await interaction.reply({
       embeds: [ok(`${game.name} — Balance`, `<@${user.id}>: **${bal}**`)],
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
     return;
   }
 
   if (sub === 'top') {
     if (!granter && !manager) {
-      await interaction.reply({ embeds: [err('Restricted')], ephemeral: true });
+      await interaction.reply({ embeds: [err('Restricted')], flags: MessageFlags.Ephemeral });
       return;
     }
     const limit = interaction.options.getInteger('limit') ?? 10;
@@ -322,11 +326,11 @@ export async function execute(interaction: ChatInputCommandInteraction) {
       rows.length === 0
         ? '_No balances_'
         : rows.map((r, i) => `**${i + 1}.** <@${r.userId}> — **${r.balance}**`).join('\n');
-    await interaction.reply({ embeds: [ok(`${game.name} — Top`, body)], ephemeral: true });
+    await interaction.reply({ embeds: [ok(`${game.name} — Top`, body)], flags: MessageFlags.Ephemeral });
   }
 }
 
-// Components / modals
+// ---- Components / Modals ----
 export async function handleComponent(interaction: Interaction): Promise<boolean> {
   if (!interaction.inGuild() || !interaction.guild) return false;
 
@@ -356,11 +360,11 @@ export async function handleComponent(interaction: Interaction): Promise<boolean
     return true;
   }
 
-  // Buttons -> show modal (ensure boolean returns)
+  // Buttons -> show modal
   if (interaction.isButton() && [CUSTOM.grantBtn, CUSTOM.removeBtn, CUSTOM.setBtn].includes(interaction.customId)) {
     const st = panel.get(interaction.user.id);
     if (!st?.gameId || !st?.userId) {
-      await interaction.reply({ embeds: [err('Select a game and a member first.')], ephemeral: true });
+      await interaction.reply({ embeds: [err('Select a game and a member first.')], flags: MessageFlags.Ephemeral });
       return true;
     }
 
@@ -387,13 +391,13 @@ export async function handleComponent(interaction: Interaction): Promise<boolean
   if (interaction.isModalSubmit() && [CUSTOM.grantModal, CUSTOM.removeModal, CUSTOM.setModal].includes(interaction.customId)) {
     const st = panel.get(interaction.user.id);
     if (!st?.gameId || !st?.userId) {
-      await interaction.reply({ embeds: [err('Session lost. Re-open /token panel.')], ephemeral: true });
+      await interaction.reply({ embeds: [err('Session lost. Re-open /token panel.')], flags: MessageFlags.Ephemeral });
       return true;
     }
 
     const game = getGameById(interaction.guild.id, st.gameId);
     if (!game) {
-      await interaction.reply({ embeds: [err('Game not found')], ephemeral: true });
+      await interaction.reply({ embeds: [err('Game not found')], flags: MessageFlags.Ephemeral });
       return true;
     }
 
@@ -407,7 +411,7 @@ export async function handleComponent(interaction: Interaction): Promise<boolean
     const reason = interaction.fields.getTextInputValue('reason')?.trim() || undefined;
     const amount = Number(amountStr);
     if (!Number.isFinite(amount) || !Number.isInteger(amount)) {
-      await interaction.reply({ embeds: [err('Amount must be an integer')], ephemeral: true });
+      await interaction.reply({ embeds: [err('Amount must be an integer')], flags: MessageFlags.Ephemeral });
       return true;
     }
 
@@ -419,44 +423,44 @@ export async function handleComponent(interaction: Interaction): Promise<boolean
 
       if (interaction.customId === CUSTOM.grantModal) {
         if (!granter) {
-          await interaction.reply({ embeds: [err('No permission')], ephemeral: true });
+          await interaction.reply({ embeds: [err('No permission')], flags: MessageFlags.Ephemeral });
           return true;
         }
         const { before, after } = grantTokens(interaction.guild.id, game.id, interaction.user.id, userId, amount, reason);
         await interaction.reply({
           embeds: [mutationEmbed({ action: 'grant', gameName: game.name, target, amount, before, after, note: reason })],
-          ephemeral: true,
+          flags: MessageFlags.Ephemeral,
         });
         return true;
       }
 
       if (interaction.customId === CUSTOM.removeModal) {
         if (!granter) {
-          await interaction.reply({ embeds: [err('No permission')], ephemeral: true });
+          await interaction.reply({ embeds: [err('No permission')], flags: MessageFlags.Ephemeral });
           return true;
         }
         const { before, after } = removeTokens(interaction.guild.id, game.id, interaction.user.id, userId, amount, reason);
         await interaction.reply({
           embeds: [mutationEmbed({ action: 'remove', gameName: game.name, target, amount, before, after, note: reason })],
-          ephemeral: true,
+          flags: MessageFlags.Ephemeral,
         });
         return true;
       }
 
       if (interaction.customId === CUSTOM.setModal) {
         if (!manager) {
-          await interaction.reply({ embeds: [err('Managers only')], ephemeral: true });
+          await interaction.reply({ embeds: [err('Managers only')], flags: MessageFlags.Ephemeral });
           return true;
         }
         const { before, after } = setTokens(interaction.guild.id, game.id, interaction.user.id, userId, amount, reason);
         await interaction.reply({
           embeds: [mutationEmbed({ action: 'set', gameName: game.name, target, amount, before, after, note: reason })],
-          ephemeral: true,
+          flags: MessageFlags.Ephemeral,
         });
         return true;
       }
     } catch (e) {
-      await interaction.reply({ embeds: [err('Failed', String((e as Error).message))], ephemeral: true });
+      await interaction.reply({ embeds: [err('Failed', String((e as Error).message))], flags: MessageFlags.Ephemeral });
       return true;
     }
   }

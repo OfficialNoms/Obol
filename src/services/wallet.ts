@@ -1,3 +1,4 @@
+// src/services/wallet.ts
 import { db, inTx, type WalletRow } from '../db';
 
 export function ensureWallet(guildId: string, gameId: number, userId: string): WalletRow {
@@ -21,44 +22,6 @@ export function getBalance(guildId: string, gameId: number, userId: string): num
   return row?.balance ?? 0;
 }
 
-// legacy helpers (still used elsewhere)
-export function setBalance(
-  guildId: string,
-  gameId: number,
-  userId: string,
-  amount: number,
-): { before: number; after: number } {
-  if (amount < 0) throw new Error('Balance cannot be negative');
-  return inTx(() => {
-    ensureWallet(guildId, gameId, userId);
-    const before = getBalance(guildId, gameId, userId);
-    db.prepare(
-      `INSERT INTO wallets (guildId, gameId, userId, balance) VALUES (?, ?, ?, ?)
-       ON CONFLICT(guildId, gameId, userId) DO UPDATE SET balance=excluded.balance`,
-    ).run(guildId, gameId, userId, amount);
-    return { before, after: amount };
-  });
-}
-
-export function incrementBalance(
-  guildId: string,
-  gameId: number,
-  userId: string,
-  delta: number,
-): { before: number; after: number } {
-  return inTx(() => {
-    ensureWallet(guildId, gameId, userId);
-    const before = getBalance(guildId, gameId, userId);
-    const after = before + delta;
-    if (after < 0) throw new Error('Operation would result in negative balance');
-    db.prepare(
-      `INSERT INTO wallets (guildId, gameId, userId, balance) VALUES (?, ?, ?, ?)
-       ON CONFLICT(guildId, gameId, userId) DO UPDATE SET balance = balance + ?`,
-    ).run(guildId, gameId, userId, Math.max(0, before), delta);
-    return { before, after };
-  });
-}
-
 export function topBalances(guildId: string, gameId: number, limit: number): WalletRow[] {
   return db
     .prepare(
@@ -67,7 +30,7 @@ export function topBalances(guildId: string, gameId: number, limit: number): Wal
     .all(guildId, gameId, limit) as WalletRow[];
 }
 
-// NEW: list a user's balances only where balance > 0
+// User balances (>0 only)
 export type UserGameBalance = { gameId: number; gameName: string; balance: number };
 export function listUserBalances(guildId: string, userId: string): UserGameBalance[] {
   return db
@@ -83,10 +46,7 @@ export function listUserBalances(guildId: string, userId: string): UserGameBalan
     .all(guildId, userId) as UserGameBalance[];
 }
 
-/* ------------------------------
- * Atomic mutations + audit log
- * ------------------------------ */
-
+/* --------- Transactions / audit --------- */
 type TxAction = 'grant' | 'remove' | 'set';
 
 function insertTx(args: {
@@ -185,4 +145,51 @@ export function setTokens(
     insertTx({ guildId, gameId, actorUserId, targetUserId, action: 'set', amount: newAmount, delta, before, after, reason });
     return { before, after };
   });
+}
+
+export type TxRow = {
+  id: number;
+  ts: number;
+  guildId: string;
+  gameId: number;
+  gameName: string;
+  actorUserId: string;
+  targetUserId: string;
+  action: 'grant' | 'remove' | 'set';
+  amount: number;
+  delta: number;
+  before: number;
+  after: number;
+  reason: string | null;
+};
+
+export function listTransactions(opts: {
+  guildId: string;
+  gameId: number;
+  targetUserId?: string;
+  action?: 'grant' | 'remove' | 'set';
+  limit: number;
+}): TxRow[] {
+  const params: unknown[] = [opts.guildId, opts.gameId];
+  let where = `t.guildId = ? AND t.gameId = ?`;
+  if (opts.targetUserId) {
+    where += ` AND t.targetUserId = ?`;
+    params.push(opts.targetUserId);
+  }
+  if (opts.action) {
+    where += ` AND t.action = ?`;
+    params.push(opts.action);
+  }
+  params.push(Math.max(1, Math.min(50, opts.limit)));
+
+  return db.prepare(
+    `
+    SELECT t.*, g.name AS gameName
+    FROM transactions t
+    JOIN games g ON g.id = t.gameId
+    WHERE ${where}
+    ORDER BY t.ts DESC, t.id DESC
+    LIMIT ?
+    `,
+  ).all(...params) as TxRow[];
 }

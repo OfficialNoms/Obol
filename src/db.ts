@@ -1,3 +1,4 @@
+// src/db.ts
 import Database from 'better-sqlite3';
 import { CONFIG } from './config';
 import fs from 'node:fs';
@@ -50,14 +51,14 @@ db.exec(`
   -- Auditable per-action log
   CREATE TABLE IF NOT EXISTS transactions (
     id INTEGER PRIMARY KEY,
-    ts INTEGER NOT NULL DEFAULT (strftime('%s','now')), -- unix seconds
+    ts INTEGER NOT NULL DEFAULT (strftime('%s','now')),
     guildId TEXT NOT NULL,
     gameId INTEGER NOT NULL REFERENCES games(id) ON DELETE CASCADE,
     actorUserId TEXT NOT NULL,
     targetUserId TEXT NOT NULL,
     action TEXT NOT NULL CHECK (action IN ('grant','remove','set')),
-    amount INTEGER NOT NULL,   -- amount supplied by the moderator
-    delta  INTEGER NOT NULL,   -- signed change applied to the balance
+    amount INTEGER NOT NULL,
+    delta  INTEGER NOT NULL,
     before INTEGER NOT NULL,
     after  INTEGER NOT NULL,
     reason TEXT
