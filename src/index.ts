@@ -1,4 +1,6 @@
 // src/index.ts
+import 'dotenv/config'; // <-- ADDED: Load environment variables first
+
 import {
   Client,
   GatewayIntentBits,
@@ -16,10 +18,12 @@ import * as tokenCmd from './commands/token';
 import * as balanceCmd from './commands/balance';
 import * as auditCmd from './commands/audit';
 
+// 🔹 Start the web server (Express + OAuth)
+import './web/server';
+
 type Command = {
   data: { name: string; toJSON: () => unknown };
   execute: (i: ChatInputCommandInteraction) => Promise<void>;
-  // support both legacy and new names so all modules work
   autocomplete?: (i: AutocompleteInteraction) => Promise<void>;
   autocomplete2?: (i: AutocompleteInteraction) => Promise<void>;
   handleComponent?: (i: Interaction) => Promise<boolean>;
@@ -35,7 +39,6 @@ commands.set(balanceCmd.data.name, balanceCmd as unknown as Command);
 commands.set(auditCmd.data.name, auditCmd as unknown as Command);
 
 async function registerCommands() {
-  // Resolve the application ID from the logged-in client
   const appId = client.application?.id ?? client.user?.id;
   if (!appId) throw new Error('Unable to resolve application ID from client');
 
@@ -56,7 +59,6 @@ async function registerCommands() {
   }
 }
 
-// Use clientReady (future-proof for djs v15)
 client.once('clientReady', async () => {
   console.log(`Logged in as ${client.user?.tag}`);
   try {
@@ -75,10 +77,9 @@ client.on('interactionCreate', async (interaction) => {
       return;
     }
 
-    // Component / modal handlers — try each module, stop when one returns true
     if (
       interaction.isRepliable() &&
-      (interaction.isButton() || interaction.isModalSubmit() || interaction.isAnySelectMenu?.())
+      (interaction.isButton() || interaction.isModalSubmit() || (interaction as any).isAnySelectMenu?.())
     ) {
       for (const cmd of commands.values()) {
         if (cmd.handleComponent && (await cmd.handleComponent(interaction))) return;
@@ -86,7 +87,6 @@ client.on('interactionCreate', async (interaction) => {
       }
     }
 
-    // Slash commands
     if (!interaction.isChatInputCommand()) return;
     const cmd = commands.get(interaction.commandName);
     if (!cmd) return;
@@ -95,8 +95,7 @@ client.on('interactionCreate', async (interaction) => {
     console.error(e);
     const opts = { content: 'Error executing command.', flags: MessageFlags.Ephemeral as number };
     if (interaction.isRepliable()) {
-      if (interaction.deferred || interaction.replied)
-        await interaction.followUp(opts).catch(() => {});
+      if (interaction.deferred || interaction.replied) await interaction.followUp(opts).catch(() => {});
       else await interaction.reply(opts).catch(() => {});
     }
   }

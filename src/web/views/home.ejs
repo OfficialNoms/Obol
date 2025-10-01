@@ -1,0 +1,10 @@
+<% layout('layout') %>
+<section>
+  <h2>Welcome to Obol</h2>
+  <p>Track per-game RP tokens with moderator-only granting. Manage games & settings in Discord or here.</p>
+  <% if (!user) { %>
+    <a href="/login" role="button">Login with Discord</a>
+  <% } else { %>
+    <a href="/guilds" role="button">Go to your servers</a>
+  <% } %>
+</section>

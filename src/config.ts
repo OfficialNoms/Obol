@@ -1,5 +1,4 @@
-import 'dotenv/config';
-
+// src/config.ts
 export const CONFIG = {
   token: process.env.DISCORD_TOKEN ?? '',
   devGuildId: process.env.DEV_GUILD_ID ?? '',

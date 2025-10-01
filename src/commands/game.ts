@@ -120,7 +120,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
       });
     } catch (e) {
       await interaction.reply({
-        embeds: [err('Failed to create game', String((e as Error).message))],
+        embeds: [err(`Failed to create game: ${String((e as Error).message)}`)],
         flags: MessageFlags.Ephemeral,
       });
     }
@@ -227,7 +227,7 @@ export async function handleComponent(interaction: Interaction): Promise<boolean
       });
     } catch (e) {
       await interaction.reply({
-        embeds: [err('Failed to create game', String((e as Error).message))],
+        embeds: [err(`Failed to create game: ${String((e as Error).message)}`)],
         flags: MessageFlags.Ephemeral,
       });
     }

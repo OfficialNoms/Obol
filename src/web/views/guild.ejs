@@ -1,0 +1,79 @@
+<% layout('layout') %>
+<h2>Server settings</h2>
+<p class="muted">Guild ID: <code class="mono"><%= guildId %></code></p>
+
+<% if (flash) { %>
+  <p class="flash"><%= flash %></p>
+<% } %>
+
+<section>
+  <h3>Games</h3>
+  <div class="grid">
+    <article>
+      <h4>Create a game</h4>
+      <form method="post" action="/guild/<%= guildId %>/game">
+        <label>Game name
+          <input name="name" placeholder="e.g. Dragonfall" required>
+        </label>
+        <label>Description
+          <textarea name="desc" rows="2" placeholder="optional"></textarea>
+        </label>
+        <button type="submit">Create</button>
+      </form>
+    </article>
+
+    <article>
+      <h4>Existing games</h4>
+      <% if (games.length === 0) { %>
+        <p class="muted">No games yet.</p>
+      <% } else { %>
+        <table>
+          <thead>
+            <tr><th>ID</th><th>Name</th><th>Log channel</th><th>Actions</th></tr>
+          </thead>
+          <tbody>
+            <% games.forEach(g => { %>
+              <tr>
+                <td><code class="mono"><%= g.id %></code></td>
+                <td><strong><%= g.name %></strong></td>
+                <td>
+                  <form method="post" action="/guild/<%= guildId %>/settings/logChannel" class="grid">
+                    <input type="hidden" name="id" value="<%= g.id %>">
+                    <input name="value" placeholder="channelId or 'null'" value="<%= g.settings.logChannelId || '' %>">
+                    <button type="submit" class="secondary">Save</button>
+                  </form>
+                </td>
+                <td>
+                  <form method="post" action="/guild/<%= guildId %>/game/<%= g.id %>/tokens" class="grid" style="margin-bottom:.5rem">
+                    <input type="hidden" name="action" value="grant">
+                    <input name="userId" placeholder="target user ID" required>
+                    <input name="amount" placeholder="amount (int)" required>
+                    <input name="reason" placeholder="reason/notes (optional)">
+                    <button type="submit">Grant</button>
+                  </form>
+                  <form method="post" action="/guild/<%= guildId %>/game/<%= g.id %>/tokens" class="grid" style="margin-bottom:.5rem">
+                    <input type="hidden" name="action" value="remove">
+                    <input name="userId" placeholder="target user ID" required>
+                    <input name="amount" placeholder="amount (int)" required>
+                    <input name="reason" placeholder="reason/notes (optional)">
+                    <button type="submit" class="contrast">Remove</button>
+                  </form>
+                  <form method="post" action="/guild/<%= guildId %>/game/<%= g.id %>/tokens" class="grid" style="margin-bottom:.5rem">
+                    <input type="hidden" name="action" value="set">
+                    <input name="userId" placeholder="target user ID" required>
+                    <input name="amount" placeholder="new balance (int)" required>
+                    <input name="reason" placeholder="reason/notes (optional)">
+                    <button type="submit" class="secondary">Set</button>
+                  </form>
+                  <form method="post" action="/guild/<%= guildId %>/game/<%= g.id %>/delete" onsubmit="return confirm('Delete game & all balances?')">
+                    <button type="submit" class="secondary outline">Delete game</button>
+                  </form>
+                </td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      <% } %>
+    </article>
+  </div>
+</section>

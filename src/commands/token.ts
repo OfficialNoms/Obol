@@ -17,6 +17,8 @@ import {
   TextInputStyle,
   Interaction,
   MessageFlags,
+  TextChannel,
+  GuildTextBasedChannel,
 } from 'discord.js';
 import { resolveGameFlexible, listGames, getGameById } from '../services/game';
 import {
@@ -27,7 +29,7 @@ import {
   removeTokens,
   setTokens,
 } from '../services/wallet';
-import { mutationEmbed, ok, err } from '../ui/embeds';
+import { mutationEmbed, ok, err, auditLogEmbed } from '../ui/embeds';
 import { CONFIG } from '../config';
 import { isGameManager, isGranter } from '../permissions';
 
@@ -51,9 +53,7 @@ export const data = new SlashCommandBuilder()
       )
       .addUserOption((o) => o.setName('member').setDescription('Member').setRequired(true))
       .addIntegerOption((o) => o.setName('amount').setDescription('Amount').setRequired(true))
-      .addStringOption((o) =>
-        o.setName('reason').setDescription('Reason/Notes').setRequired(false),
-      ),
+      .addStringOption((o) => o.setName('reason').setDescription('Reason/Notes').setRequired(false)),
   )
   .addSubcommand((sc) =>
     sc
@@ -68,9 +68,7 @@ export const data = new SlashCommandBuilder()
       )
       .addUserOption((o) => o.setName('member').setDescription('Member').setRequired(true))
       .addIntegerOption((o) => o.setName('amount').setDescription('Amount').setRequired(true))
-      .addStringOption((o) =>
-        o.setName('reason').setDescription('Reason/Notes').setRequired(false),
-      ),
+      .addStringOption((o) => o.setName('reason').setDescription('Reason/Notes').setRequired(false)),
   )
   .addSubcommand((sc) =>
     sc
@@ -85,9 +83,7 @@ export const data = new SlashCommandBuilder()
       )
       .addUserOption((o) => o.setName('member').setDescription('Member').setRequired(true))
       .addIntegerOption((o) => o.setName('amount').setDescription('Amount').setRequired(true))
-      .addStringOption((o) =>
-        o.setName('reason').setDescription('Reason/Notes').setRequired(false),
-      ),
+      .addStringOption((o) => o.setName('reason').setDescription('Reason/Notes').setRequired(false)),
   )
   .addSubcommand((sc) =>
     sc
@@ -157,38 +153,23 @@ function gameSelectRow(guildId: string) {
   const menu = new StringSelectMenuBuilder()
     .setCustomId(CUSTOM.gameSelect)
     .setPlaceholder('Select game…')
-    .addOptions(
-      games.map((g) => new StringSelectMenuOptionBuilder().setLabel(g.name).setValue(String(g.id))),
-    );
+    .addOptions(games.map((g) => new StringSelectMenuOptionBuilder().setLabel(g.name).setValue(String(g.id))));
   return new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(menu);
 }
 function userSelectRow() {
-  const menu = new UserSelectMenuBuilder()
-    .setCustomId(CUSTOM.userSelect)
-    .setPlaceholder('Pick member…');
+  const menu = new UserSelectMenuBuilder().setCustomId(CUSTOM.userSelect).setPlaceholder('Pick member…');
   return new ActionRowBuilder<UserSelectMenuBuilder>().addComponents(menu);
 }
 function actionButtonsRow() {
-  const grant = new ButtonBuilder()
-    .setCustomId(CUSTOM.grantBtn)
-    .setLabel('Grant')
-    .setStyle(ButtonStyle.Success);
-  const remove = new ButtonBuilder()
-    .setCustomId(CUSTOM.removeBtn)
-    .setLabel('Remove')
-    .setStyle(ButtonStyle.Danger);
-  const set = new ButtonBuilder()
-    .setCustomId(CUSTOM.setBtn)
-    .setLabel('Set')
-    .setStyle(ButtonStyle.Primary);
+  const grant = new ButtonBuilder().setCustomId(CUSTOM.grantBtn).setLabel('Grant').setStyle(ButtonStyle.Success);
+  const remove = new ButtonBuilder().setCustomId(CUSTOM.removeBtn).setLabel('Remove').setStyle(ButtonStyle.Danger);
+  const set = new ButtonBuilder().setCustomId(CUSTOM.setBtn).setLabel('Set').setStyle(ButtonStyle.Primary);
   return new ActionRowBuilder<ButtonBuilder>().addComponents(grant, remove, set);
 }
 
 // Modal with context
 function amountModal(customId: string, title: string, gameName: string, targetLabel?: string) {
-  const fullTitle = targetLabel
-    ? `${title} — ${gameName} → ${targetLabel}`
-    : `${title} — ${gameName}`;
+  const fullTitle = targetLabel ? `${title} — ${gameName} → ${targetLabel}` : `${title} — ${gameName}`;
   const modal = new ModalBuilder().setCustomId(customId).setTitle(fullTitle);
 
   const amount = new TextInputBuilder()
@@ -210,6 +191,31 @@ function amountModal(customId: string, title: string, gameName: string, targetLa
     new ActionRowBuilder<TextInputBuilder>().addComponents(reason),
   );
   return modal;
+}
+
+/** Robustly retrieve logChannelId from a game row */
+function getLogChannelId(game: any): string | null {
+  try {
+    const parsed = game?.settingsJson ? JSON.parse(game.settingsJson) : null;
+    return parsed?.logChannelId ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** Post a log embed to the game's configured log channel (if any) */
+async function postLog(interaction: Interaction, game: any, embed: ReturnType<typeof auditLogEmbed>) {
+  const chId = getLogChannelId(game);
+  if (!chId || !interaction.guild) return;
+  const ch = interaction.guild.channels.cache.get(chId) ?? (await interaction.guild.channels.fetch(chId).catch(() => null));
+  if (!ch) return;
+  // Only try text-ish channels
+  if (!('send' in (ch as GuildTextBasedChannel))) return;
+  try {
+    await (ch as TextChannel).send({ embeds: [embed] });
+  } catch {
+    // ignore (missing perms, etc.)
+  }
 }
 
 // ---- Slash executor ----
@@ -262,32 +268,16 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     let beforeAfter: { before: number; after: number };
     try {
       if (sub === 'grant') {
-        beforeAfter = grantTokens(
-          interaction.guild.id,
-          game.id,
-          interaction.user.id,
-          user.id,
-          amount,
-          reason,
-        );
+        beforeAfter = grantTokens(interaction.guild.id, game.id, interaction.user.id, user.id, amount, reason);
       } else {
-        beforeAfter = removeTokens(
-          interaction.guild.id,
-          game.id,
-          interaction.user.id,
-          user.id,
-          amount,
-          reason,
-        );
+        beforeAfter = removeTokens(interaction.guild.id, game.id, interaction.user.id, user.id, amount, reason);
       }
     } catch (e) {
-      await interaction.reply({
-        embeds: [err('Failed', String((e as Error).message))],
-        flags: MessageFlags.Ephemeral,
-      });
+      await interaction.reply({ embeds: [err(`Failed: ${String((e as Error).message)}`)], flags: MessageFlags.Ephemeral });
       return;
     }
 
+    // ephemeral ack
     await interaction.reply({
       embeds: [
         mutationEmbed({
@@ -302,6 +292,22 @@ export async function execute(interaction: ChatInputCommandInteraction) {
       ],
       flags: MessageFlags.Ephemeral,
     });
+
+    // async log (best-effort)
+    postLog(
+      interaction,
+      game,
+      auditLogEmbed({
+        action: sub,
+        gameName: game.name,
+        actorUserId: interaction.user.id,
+        targetUserId: user.id,
+        amount,
+        before: beforeAfter.before,
+        after: beforeAfter.after,
+        reason,
+      }),
+    );
     return;
   }
 
@@ -317,19 +323,9 @@ export async function execute(interaction: ChatInputCommandInteraction) {
 
     let beforeAfter: { before: number; after: number };
     try {
-      beforeAfter = setTokens(
-        interaction.guild.id,
-        game.id,
-        interaction.user.id,
-        user.id,
-        amount,
-        reason,
-      );
+      beforeAfter = setTokens(interaction.guild.id, game.id, interaction.user.id, user.id, amount, reason);
     } catch (e) {
-      await interaction.reply({
-        embeds: [err('Failed', String((e as Error).message))],
-        flags: MessageFlags.Ephemeral,
-      });
+      await interaction.reply({ embeds: [err(`Failed: ${String((e as Error).message)}`)], flags: MessageFlags.Ephemeral });
       return;
     }
     await interaction.reply({
@@ -346,6 +342,22 @@ export async function execute(interaction: ChatInputCommandInteraction) {
       ],
       flags: MessageFlags.Ephemeral,
     });
+
+    // async log
+    postLog(
+      interaction,
+      game,
+      auditLogEmbed({
+        action: 'set',
+        gameName: game.name,
+        actorUserId: interaction.user.id,
+        targetUserId: user.id,
+        amount,
+        before: beforeAfter.before,
+        after: beforeAfter.after,
+        reason,
+      }),
+    );
     return;
   }
 
@@ -374,10 +386,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
       rows.length === 0
         ? '_No balances_'
         : rows.map((r, i) => `**${i + 1}.** <@${r.userId}> — **${r.balance}**`).join('\n');
-    await interaction.reply({
-      embeds: [ok(`${game.name} — Top`, body)],
-      flags: MessageFlags.Ephemeral,
-    });
+    await interaction.reply({ embeds: [ok(`${game.name} — Top`, body)], flags: MessageFlags.Ephemeral });
   }
 }
 
@@ -392,12 +401,7 @@ export async function handleComponent(interaction: Interaction): Promise<boolean
     st.gameId = chosen;
     panel.set(interaction.user.id, st);
     await interaction.update({
-      embeds: [
-        ok(
-          'Obol — Token Panel',
-          `Game: **#${chosen}** selected.\nPick a member and choose an action.`,
-        ),
-      ],
+      embeds: [ok('Obol — Token Panel', `Game: **#${chosen}** selected.\nPick a member and choose an action.`)],
       components: [gameSelectRow(interaction.guild.id), userSelectRow(), actionButtonsRow()],
     });
     return true;
@@ -410,28 +414,17 @@ export async function handleComponent(interaction: Interaction): Promise<boolean
     st.userId = target;
     panel.set(interaction.user.id, st);
     await interaction.update({
-      embeds: [
-        ok(
-          'Obol — Token Panel',
-          `Member: <@${target}> selected.\nPick a game and choose an action.`,
-        ),
-      ],
+      embeds: [ok('Obol — Token Panel', `Member: <@${target}> selected.\nPick a game and choose an action.`)],
       components: [gameSelectRow(interaction.guild.id), userSelectRow(), actionButtonsRow()],
     });
     return true;
   }
 
   // Buttons -> show modal
-  if (
-    interaction.isButton() &&
-    [CUSTOM.grantBtn, CUSTOM.removeBtn, CUSTOM.setBtn].includes(interaction.customId)
-  ) {
+  if (interaction.isButton() && [CUSTOM.grantBtn, CUSTOM.removeBtn, CUSTOM.setBtn].includes(interaction.customId)) {
     const st = panel.get(interaction.user.id);
     if (!st?.gameId || !st?.userId) {
-      await interaction.reply({
-        embeds: [err('Select a game and a member first.')],
-        flags: MessageFlags.Ephemeral,
-      });
+      await interaction.reply({ embeds: [err('Select a game and a member first.')], flags: MessageFlags.Ephemeral });
       return true;
     }
 
@@ -441,36 +434,24 @@ export async function handleComponent(interaction: Interaction): Promise<boolean
     const targetLabel = targetUser ? `@${targetUser.username}` : `<@${st.userId}>`;
 
     if (interaction.customId === CUSTOM.grantBtn) {
-      await interaction.showModal(
-        amountModal(CUSTOM.grantModal, 'Grant Token', gameName, targetLabel),
-      );
+      await interaction.showModal(amountModal(CUSTOM.grantModal, 'Grant Token', gameName, targetLabel));
       return true;
     }
     if (interaction.customId === CUSTOM.removeBtn) {
-      await interaction.showModal(
-        amountModal(CUSTOM.removeModal, 'Remove Tokens', gameName, targetLabel),
-      );
+      await interaction.showModal(amountModal(CUSTOM.removeModal, 'Remove Tokens', gameName, targetLabel));
       return true;
     }
     if (interaction.customId === CUSTOM.setBtn) {
-      await interaction.showModal(
-        amountModal(CUSTOM.setModal, 'Set Balance', gameName, targetLabel),
-      );
+      await interaction.showModal(amountModal(CUSTOM.setModal, 'Set Balance', gameName, targetLabel));
       return true;
     }
   }
 
   // Modal submit -> perform operation
-  if (
-    interaction.isModalSubmit() &&
-    [CUSTOM.grantModal, CUSTOM.removeModal, CUSTOM.setModal].includes(interaction.customId)
-  ) {
+  if (interaction.isModalSubmit() && [CUSTOM.grantModal, CUSTOM.removeModal, CUSTOM.setModal].includes(interaction.customId)) {
     const st = panel.get(interaction.user.id);
     if (!st?.gameId || !st?.userId) {
-      await interaction.reply({
-        embeds: [err('Session lost. Re-open /token panel.')],
-        flags: MessageFlags.Ephemeral,
-      });
+      await interaction.reply({ embeds: [err('Session lost. Re-open /token panel.')], flags: MessageFlags.Ephemeral });
       return true;
     }
 
@@ -490,10 +471,7 @@ export async function handleComponent(interaction: Interaction): Promise<boolean
     const reason = interaction.fields.getTextInputValue('reason')?.trim() || undefined;
     const amount = Number(amountStr);
     if (!Number.isFinite(amount) || !Number.isInteger(amount)) {
-      await interaction.reply({
-        embeds: [err('Amount must be an integer')],
-        flags: MessageFlags.Ephemeral,
-      });
+      await interaction.reply({ embeds: [err('Amount must be an integer')], flags: MessageFlags.Ephemeral });
       return true;
     }
 
@@ -505,107 +483,86 @@ export async function handleComponent(interaction: Interaction): Promise<boolean
 
       if (interaction.customId === CUSTOM.grantModal) {
         if (!granter) {
-          await interaction.reply({
-            embeds: [err('No permission')],
-            flags: MessageFlags.Ephemeral,
-          });
+          await interaction.reply({ embeds: [err('No permission')], flags: MessageFlags.Ephemeral });
           return true;
         }
-        const { before, after } = grantTokens(
-          interaction.guild.id,
-          game.id,
-          interaction.user.id,
-          userId,
-          amount,
-          reason,
-        );
+        const { before, after } = grantTokens(interaction.guild.id, game.id, interaction.user.id, userId, amount, reason);
         await interaction.reply({
-          embeds: [
-            mutationEmbed({
-              action: 'grant',
-              gameName: game.name,
-              target,
-              amount,
-              before,
-              after,
-              note: reason,
-            }),
-          ],
+          embeds: [mutationEmbed({ action: 'grant', gameName: game.name, target, amount, before, after, note: reason })],
           flags: MessageFlags.Ephemeral,
         });
+        postLog(
+          interaction,
+          game,
+          auditLogEmbed({
+            action: 'grant',
+            gameName: game.name,
+            actorUserId: interaction.user.id,
+            targetUserId: userId,
+            amount,
+            before,
+            after,
+            reason,
+          }),
+        );
         return true;
       }
 
       if (interaction.customId === CUSTOM.removeModal) {
         if (!granter) {
-          await interaction.reply({
-            embeds: [err('No permission')],
-            flags: MessageFlags.Ephemeral,
-          });
+          await interaction.reply({ embeds: [err('No permission')], flags: MessageFlags.Ephemeral });
           return true;
         }
-        const { before, after } = removeTokens(
-          interaction.guild.id,
-          game.id,
-          interaction.user.id,
-          userId,
-          amount,
-          reason,
-        );
+        const { before, after } = removeTokens(interaction.guild.id, game.id, interaction.user.id, userId, amount, reason);
         await interaction.reply({
-          embeds: [
-            mutationEmbed({
-              action: 'remove',
-              gameName: game.name,
-              target,
-              amount,
-              before,
-              after,
-              note: reason,
-            }),
-          ],
+          embeds: [mutationEmbed({ action: 'remove', gameName: game.name, target, amount, before, after, note: reason })],
           flags: MessageFlags.Ephemeral,
         });
+        postLog(
+          interaction,
+          game,
+          auditLogEmbed({
+            action: 'remove',
+            gameName: game.name,
+            actorUserId: interaction.user.id,
+            targetUserId: userId,
+            amount,
+            before,
+            after,
+            reason,
+          }),
+        );
         return true;
       }
 
       if (interaction.customId === CUSTOM.setModal) {
         if (!manager) {
-          await interaction.reply({
-            embeds: [err('Managers only')],
-            flags: MessageFlags.Ephemeral,
-          });
+          await interaction.reply({ embeds: [err('Managers only')], flags: MessageFlags.Ephemeral });
           return true;
         }
-        const { before, after } = setTokens(
-          interaction.guild.id,
-          game.id,
-          interaction.user.id,
-          userId,
-          amount,
-          reason,
-        );
+        const { before, after } = setTokens(interaction.guild.id, game.id, interaction.user.id, userId, amount, reason);
         await interaction.reply({
-          embeds: [
-            mutationEmbed({
-              action: 'set',
-              gameName: game.name,
-              target,
-              amount,
-              before,
-              after,
-              note: reason,
-            }),
-          ],
+          embeds: [mutationEmbed({ action: 'set', gameName: game.name, target, amount, before, after, note: reason })],
           flags: MessageFlags.Ephemeral,
         });
+        postLog(
+          interaction,
+          game,
+          auditLogEmbed({
+            action: 'set',
+            gameName: game.name,
+            actorUserId: interaction.user.id,
+            targetUserId: userId,
+            amount,
+            before,
+            after,
+            reason,
+          }),
+        );
         return true;
       }
     } catch (e) {
-      await interaction.reply({
-        embeds: [err('Failed', String((e as Error).message))],
-        flags: MessageFlags.Ephemeral,
-      });
+      await interaction.reply({ embeds: [err(`Failed: ${String((e as Error).message)}`)], flags: MessageFlags.Ephemeral });
       return true;
     }
   }

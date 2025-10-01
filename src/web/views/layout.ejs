@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width,initial-scale=1"/>
+    <title><%= title %></title>
+    <!-- Pico.css -->
+    <link rel="stylesheet" href="https://unpkg.com/@picocss/pico@2/css/pico.min.css">
+    <style>
+      header.container { margin-top: 1.2rem; }
+      .flash { background:#eef; padding:.5rem .75rem; border-radius:.5rem; margin-bottom:1rem; }
+      .muted { opacity:.7 }
+      .grid  { gap: 1rem; }
+      code.mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; }
+      footer { margin-top: 3rem; opacity:.7; font-size: .9rem; }
+    </style>
+  </head>
+  <body>
+    <header class="container">
+      <nav>
+        <ul>
+          <li><strong>Obol</strong></li>
+        </ul>
+        <ul>
+          <li><a href="/">Home</a></li>
+          <li><a href="/guilds">Your servers</a></li>
+          <li><a href="/help">Help/FAQ</a></li>
+          <% if (user) { %>
+            <li><span class="muted"><%= user.username %></span></li>
+            <li><a href="/logout" role="button" class="secondary">Logout</a></li>
+          <% } else { %>
+            <li><a href="/login" role="button">Login</a></li>
+          <% } %>
+        </ul>
+      </nav>
+    </header>
+
+    <main class="container">
+      <%- body %>
+    </main>
+
+    <footer class="container">
+      <p>Obol — RP tokens bot & panel.</p>
+    </footer>
+  </body>
+</html>
