@@ -3,6 +3,11 @@ import {
   ChatInputCommandInteraction,
   PermissionFlagsBits,
   GuildMember,
+  ModalBuilder,
+  TextInputBuilder,
+  TextInputStyle,
+  ActionRowBuilder,
+  Interaction,
 } from 'discord.js';
 import {
   createGame,
@@ -15,15 +20,41 @@ import { ok, err } from '../ui/embeds';
 import { isBotAdmin } from '../permissions';
 import { CONFIG } from '../config';
 
+const CUSTOM = {
+  createGameModal: 'obol:modal:create-game',
+};
+
+function createGameModal() {
+  const modal = new ModalBuilder().setCustomId(CUSTOM.createGameModal).setTitle('Create game');
+  const name = new TextInputBuilder()
+    .setCustomId('name')
+    .setLabel('Game name')
+    .setPlaceholder('e.g. Dragonfall')
+    .setRequired(true)
+    .setStyle(TextInputStyle.Short);
+  const desc = new TextInputBuilder()
+    .setCustomId('desc')
+    .setLabel('Description (optional)')
+    .setRequired(false)
+    .setStyle(TextInputStyle.Paragraph);
+
+  modal.addComponents(
+    new ActionRowBuilder<TextInputBuilder>().addComponents(name),
+    new ActionRowBuilder<TextInputBuilder>().addComponents(desc),
+  );
+  return modal;
+}
+
 export const data = new SlashCommandBuilder()
   .setName('game')
   .setDescription('Manage RP token games')
   .addSubcommand((sc) =>
     sc
       .setName('create')
-      .setDescription('Create a new game')
-      .addStringOption((o) => o.setName('name').setDescription('Game name').setRequired(true))
-      .addStringOption((o) => o.setName('desc').setDescription('Description').setRequired(false)),
+      .setDescription('Create a new game (modal)')
+      // keep optional legacy args; if omitted, we show the modal
+      .addStringOption((o) => o.setName('name').setDescription('Game name (optional)'))
+      .addStringOption((o) => o.setName('desc').setDescription('Description (optional)')),
   )
   .addSubcommand((sc) => sc.setName('list').setDescription('List games'))
   .addSubcommand((sc) =>
@@ -64,23 +95,28 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     return interaction.reply({ embeds: [err('Guild-only command')], ephemeral: true });
   }
 
-  // Ensure a real GuildMember (not the APIInteractionGuildMember lightweight type)
   const member: GuildMember =
     interaction.guild.members.resolve(interaction.user.id) ??
     (await interaction.guild.members.fetch(interaction.user.id));
 
   const admin = isBotAdmin(member, CONFIG.botAdminRoleIds);
-  if (!admin) {
-    return interaction.reply({ embeds: [err('Admins only')], ephemeral: true });
-  }
+  if (!admin) return interaction.reply({ embeds: [err('Admins only')], ephemeral: true });
 
   const sub = interaction.options.getSubcommand();
 
   if (sub === 'create') {
-    const name = interaction.options.getString('name', true).trim();
-    const desc = interaction.options.getString('desc') ?? undefined;
+    const nameArg = interaction.options.getString('name')?.trim();
+    const descArg = interaction.options.getString('desc') ?? undefined;
+
+    // If no args, open modal
+    if (!nameArg) {
+      await interaction.showModal(createGameModal());
+      return;
+    }
+
+    // Legacy inline create (still supported)
     try {
-      const game = createGame(interaction.guild.id, name, desc);
+      const game = createGame(interaction.guild.id, nameArg, descArg);
       await interaction.reply({
         embeds: [ok('Game created', `ID: **${game.id}**\nName: **${game.name}**`)],
         ephemeral: true,
@@ -109,10 +145,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
   if (sub === 'delete') {
     const id = interaction.options.getInteger('id', true);
     const game = getGameById(interaction.guild.id, id);
-    if (!game) {
-      await interaction.reply({ embeds: [err('Game not found')], ephemeral: true });
-      return;
-    }
+    if (!game) return interaction.reply({ embeds: [err('Game not found')], ephemeral: true });
     deleteGame(interaction.guild.id, id);
     await interaction.reply({
       embeds: [ok('Game deleted', `**${game.name}** (#${id})`)],
@@ -157,4 +190,44 @@ export async function execute(interaction: ChatInputCommandInteraction) {
 
     await interaction.reply({ embeds: [err('Unknown key')], ephemeral: true });
   }
+}
+
+export async function handleComponent(interaction: Interaction): Promise<boolean> {
+  if (!interaction.inGuild() || !interaction.guild) return false;
+
+  // Handle modal submit for create
+  if (interaction.isModalSubmit() && interaction.customId === CUSTOM.createGameModal) {
+    const name = interaction.fields.getTextInputValue('name')?.trim();
+    const desc = interaction.fields.getTextInputValue('desc')?.trim() || undefined;
+
+    if (!name) {
+      await interaction.reply({ embeds: [err('Name is required')], ephemeral: true });
+      return true;
+    }
+
+    // Permission check (admin only)
+    const member: GuildMember =
+      interaction.guild.members.resolve(interaction.user.id) ??
+      (await interaction.guild.members.fetch(interaction.user.id));
+    if (!isBotAdmin(member, CONFIG.botAdminRoleIds)) {
+      await interaction.reply({ embeds: [err('Admins only')], ephemeral: true });
+      return true;
+    }
+
+    try {
+      const game = createGame(interaction.guild.id, name, desc);
+      await interaction.reply({
+        embeds: [ok('Game created', `ID: **${game.id}**\nName: **${game.name}**`)],
+        ephemeral: true,
+      });
+    } catch (e) {
+      await interaction.reply({
+        embeds: [err('Failed to create game', String((e as Error).message))],
+        ephemeral: true,
+      });
+    }
+    return true;
+  }
+
+  return false;
 }

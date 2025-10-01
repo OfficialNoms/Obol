@@ -46,6 +46,24 @@ db.exec(`
     balance INTEGER NOT NULL DEFAULT 0,
     UNIQUE (guildId, gameId, userId)
   );
+
+  -- Auditable per-action log
+  CREATE TABLE IF NOT EXISTS transactions (
+    id INTEGER PRIMARY KEY,
+    ts INTEGER NOT NULL DEFAULT (strftime('%s','now')), -- unix seconds
+    guildId TEXT NOT NULL,
+    gameId INTEGER NOT NULL REFERENCES games(id) ON DELETE CASCADE,
+    actorUserId TEXT NOT NULL,
+    targetUserId TEXT NOT NULL,
+    action TEXT NOT NULL CHECK (action IN ('grant','remove','set')),
+    amount INTEGER NOT NULL,   -- amount supplied by the moderator
+    delta  INTEGER NOT NULL,   -- signed change applied to the balance
+    before INTEGER NOT NULL,
+    after  INTEGER NOT NULL,
+    reason TEXT
+  );
+  CREATE INDEX IF NOT EXISTS idx_tx_game_ts   ON transactions (guildId, gameId, ts DESC);
+  CREATE INDEX IF NOT EXISTS idx_tx_target_ts ON transactions (guildId, targetUserId, ts DESC);
 `);
 
 export function inTx<T>(fn: () => T): T {

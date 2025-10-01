@@ -6,15 +6,18 @@ import {
   Collection,
   ChatInputCommandInteraction,
   AutocompleteInteraction,
+  Interaction,
 } from 'discord.js';
 import { CONFIG } from './config';
 import * as gameCmd from './commands/game';
 import * as tokenCmd from './commands/token';
+import * as balanceCmd from './commands/balance';
 
 type Command = {
   data: any;
   execute: (i: ChatInputCommandInteraction) => Promise<void>;
   autocomplete?: (i: AutocompleteInteraction) => Promise<void>;
+  handleComponent?: (i: Interaction) => Promise<boolean>;
 };
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
@@ -22,10 +25,11 @@ const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 const commands = new Collection<string, Command>();
 commands.set(gameCmd.data.name, gameCmd as unknown as Command);
 commands.set(tokenCmd.data.name, tokenCmd as unknown as Command);
+commands.set(balanceCmd.data.name, balanceCmd as unknown as Command);
 
 async function registerCommands() {
   const rest = new REST({ version: '10' }).setToken(CONFIG.token);
-  const payload = [gameCmd.data.toJSON(), tokenCmd.data.toJSON()];
+  const payload = [gameCmd.data.toJSON(), tokenCmd.data.toJSON(), balanceCmd.data.toJSON()];
   if (CONFIG.devGuildId) {
     await rest.put(
       Routes.applicationGuildCommands(client.application?.id ?? '0', CONFIG.devGuildId),
@@ -44,18 +48,20 @@ client.once('ready', async () => {
 });
 
 client.on('interactionCreate', async (interaction) => {
+  // Autocomplete
   if (interaction.isAutocomplete()) {
     const cmd = commands.get(interaction.commandName);
     if (cmd?.autocomplete) {
-      try {
-        await cmd.autocomplete(interaction);
-      } catch (e) {
-        console.error(e);
-      }
+      try { await cmd.autocomplete(interaction); } catch (e) { console.error(e); }
     }
     return;
   }
 
+  // Components/Modals (try both token & game handlers)
+  if (await (tokenCmd.handleComponent?.(interaction) ?? Promise.resolve(false))) return;
+  if (await (gameCmd.handleComponent?.(interaction) ?? Promise.resolve(false))) return;
+
+  // Slash commands
   if (!interaction.isChatInputCommand()) return;
   const cmd = commands.get(interaction.commandName);
   if (!cmd) return;
