@@ -1,12 +1,7 @@
 // src/web/server.ts
 import express, { type Request, type Response, type NextFunction } from 'express';
 import path from 'node:path';
-
-// Force load the CJS module correctly
-import { createRequire } from 'node:module';
-const require = createRequire(import.meta.url);
-const ejsLayouts = require('express-ejs-layouts');
-
+import ejsLayouts from 'express-ejs-layouts';
 import { initAuth } from './auth';
 import { createGame, deleteGame, getGameById, listGames, updateSettings } from '../services/game';
 import { CONFIG } from '../config';
@@ -16,7 +11,7 @@ import { Routes } from 'discord.js';
 import { parseSettings } from '../permissions';
 
 const app = express();
-const PORT = Number(process.env.WEB_PORT ?? 3000);
+const PORT = Number(process.env.WEB_PORT ?? 3090);
 
 // view engine
 app.set('views', path.join(process.cwd(), 'src', 'web', 'views'));
@@ -56,7 +51,6 @@ app.get('/guilds', ensureAuth, (req, res) => {
 // Per-guild settings + games
 app.get('/guild/:id', ensureAuth, async (req, res) => {
   const guildId = req.params.id!;
-  // TODO: Add check to ensure user is actually in this guild and can manage it.
   const gamesRaw = listGames(guildId);
   const games = gamesRaw.map((g) => ({ ...g, settings: parseSettings(g.settingsJson) }));
   res.render('guild', { guildId, games, flash: req.query.flash ?? null });
@@ -68,7 +62,6 @@ app.post('/guild/:id/settings/logChannel', ensureAuth, async (req, res) => {
   const { id, value } = req.body as { id: string; value: string };
   const game = getGameById(guildId, Number(id));
   if (!game) return res.status(404).render('error', { message: 'Game not found' });
-  // TODO: Perm check
   const val = value?.trim().toLowerCase() === 'null' || value?.trim() === '' ? null : value.trim();
   updateSettings(guildId, game.id, { logChannelId: val });
   return res.redirect(`/guild/${guildId}?flash=Log channel updated!`);
@@ -79,7 +72,6 @@ app.post('/guild/:id/game', ensureAuth, (req, res) => {
   const guildId = req.params.id!;
   const { name, desc } = req.body as { name: string; desc?: string };
   if (!name?.trim()) return res.status(400).render('error', { message: 'Name is required' });
-  // TODO: Perm check
   try {
     createGame(guildId, name.trim(), desc?.trim() || undefined);
     res.redirect(`/guild/${guildId}?flash=Game created successfully!`);
@@ -94,16 +86,10 @@ app.post('/guild/:id/game/:gameId/delete', ensureAuth, (req, res) => {
   const gameId = Number(req.params.gameId!);
   const game = getGameById(guildId, gameId);
   if (!game) return res.status(404).render('error', { message: 'Game not found' });
-  // TODO: Perm check
   deleteGame(guildId, gameId);
   res.redirect(`/guild/${guildId}?flash=Game deleted successfully.`);
 });
 
-/**
- * Token actions via web:
- * - Validates user’s roles via bot REST (so web matches Discord permission model)
- * - Enforces grant/set/remove using game's configured roles
- */
 app.post('/guild/:id/game/:gameId/tokens', ensureAuth, async (req, res) => {
   const guildId = req.params.id!;
   const gameId = Number(req.params.gameId!);
@@ -117,7 +103,6 @@ app.post('/guild/:id/game/:gameId/tokens', ensureAuth, async (req, res) => {
   const game = getGameById(guildId, gameId);
   if (!game) return res.status(404).render('error', { message: 'Game not found' });
 
-  // Get member roles via bot REST
   const rest = new REST({ version: '10' }).setToken(CONFIG.token);
   let member: any;
   try {
@@ -127,13 +112,10 @@ app.post('/guild/:id/game/:gameId/tokens', ensureAuth, async (req, res) => {
   }
   const roleIds: string[] = member.roles ?? [];
   const adminRoleIds = CONFIG.botAdminRoleIds ?? [];
-
   const settings = parseSettings(game.settingsJson);
-
   const isAdmin = adminRoleIds.some((r) => roleIds.includes(r));
   const isManager = isAdmin || settings.managerRoleIds.some((r) => roleIds.includes(r));
   const isGranter = isAdmin || isManager || settings.grantRoleIds.some((r) => roleIds.includes(r));
-
   const amt = Number(amount);
   if (!Number.isInteger(amt)) return res.status(400).render('error', { message: 'Amount must be an integer.' });
 
@@ -156,7 +138,6 @@ app.post('/guild/:id/game/:gameId/tokens', ensureAuth, async (req, res) => {
 
   res.redirect(`/guild/${guildId}?flash=Tokens updated successfully!`);
 });
-
 
 // errors
 app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
