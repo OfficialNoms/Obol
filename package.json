@@ -10,9 +10,10 @@
     "dev": "tsx watch src/index.ts",
     "start": "node --enable-source-maps dist/index.js",
     "build": "tsc -p tsconfig.json",
-    "lint": "eslint \"src/**/*.{ts,tsx}\"",
+    "lint": "eslint . --ext .ts",
     "fix": "eslint \"src/**/*.{ts,tsx}\" --fix",
-    "prepare": "echo \"✓ Obol prepared\""
+    "prepare": "echo \"✓ Obol prepared\"",
+    "format": "prettier -w ."
   },
   "dependencies": {
     "better-sqlite3": "^11.8.1",
@@ -22,10 +23,13 @@
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^22.7.5",
-    "eslint": "^9.13.0",
-    "eslint-config-prettier": "^9.1.0",
-    "eslint-plugin-import": "^2.31.0",
-    "prettier": "^3.3.3",
+    "@typescript-eslint/eslint-plugin": "^8.45.0",
+    "@typescript-eslint/parser": "^8.45.0",
+    "eslint": "^9.36.0",
+    "eslint-config-prettier": "^9.1.2",
+    "eslint-plugin-import": "^2.32.0",
+    "eslint-plugin-unused-imports": "^4.2.0",
+    "prettier": "^3.6.2",
     "tsx": "^4.19.1",
     "typescript": "^5.6.3"
   }

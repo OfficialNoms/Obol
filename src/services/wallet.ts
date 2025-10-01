@@ -96,7 +96,18 @@ export function grantTokens(
       `INSERT INTO wallets (guildId, gameId, userId, balance) VALUES (?, ?, ?, ?)
        ON CONFLICT(guildId, gameId, userId) DO UPDATE SET balance = balance + ?`,
     ).run(guildId, gameId, targetUserId, Math.max(0, before), amount);
-    insertTx({ guildId, gameId, actorUserId, targetUserId, action: 'grant', amount, delta: amount, before, after, reason });
+    insertTx({
+      guildId,
+      gameId,
+      actorUserId,
+      targetUserId,
+      action: 'grant',
+      amount,
+      delta: amount,
+      before,
+      after,
+      reason,
+    });
     return { before, after };
   });
 }
@@ -119,7 +130,18 @@ export function removeTokens(
       `INSERT INTO wallets (guildId, gameId, userId, balance) VALUES (?, ?, ?, ?)
        ON CONFLICT(guildId, gameId, userId) DO UPDATE SET balance = balance - ?`,
     ).run(guildId, gameId, targetUserId, Math.max(0, before), amount);
-    insertTx({ guildId, gameId, actorUserId, targetUserId, action: 'remove', amount, delta: -amount, before, after, reason });
+    insertTx({
+      guildId,
+      gameId,
+      actorUserId,
+      targetUserId,
+      action: 'remove',
+      amount,
+      delta: -amount,
+      before,
+      after,
+      reason,
+    });
     return { before, after };
   });
 }
@@ -142,7 +164,18 @@ export function setTokens(
     ).run(guildId, gameId, targetUserId, newAmount);
     const after = newAmount;
     const delta = after - before;
-    insertTx({ guildId, gameId, actorUserId, targetUserId, action: 'set', amount: newAmount, delta, before, after, reason });
+    insertTx({
+      guildId,
+      gameId,
+      actorUserId,
+      targetUserId,
+      action: 'set',
+      amount: newAmount,
+      delta,
+      before,
+      after,
+      reason,
+    });
     return { before, after };
   });
 }
@@ -182,8 +215,9 @@ export function listTransactions(opts: {
   }
   params.push(Math.max(1, Math.min(50, opts.limit)));
 
-  return db.prepare(
-    `
+  return db
+    .prepare(
+      `
     SELECT t.*, g.name AS gameName
     FROM transactions t
     JOIN games g ON g.id = t.gameId
@@ -191,5 +225,6 @@ export function listTransactions(opts: {
     ORDER BY t.ts DESC, t.id DESC
     LIMIT ?
     `,
-  ).all(...params) as TxRow[];
+    )
+    .all(...params) as TxRow[];
 }

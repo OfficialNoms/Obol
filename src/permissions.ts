@@ -34,7 +34,11 @@ export function isGameManager(
   return member.roles.cache.some((r) => s.managerRoleIds.includes(r.id));
 }
 
-export function isGranter(member: GuildMember, game: GameRow, globalAdminRoleIds: string[]): boolean {
+export function isGranter(
+  member: GuildMember,
+  game: GameRow,
+  globalAdminRoleIds: string[],
+): boolean {
   if (isGameManager(member, game, globalAdminRoleIds)) return true;
   const s = parseSettings(game.settingsJson);
   return member.roles.cache.some((r) => s.grantRoleIds.includes(r.id));

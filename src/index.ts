@@ -19,8 +19,11 @@ import * as auditCmd from './commands/audit';
 type Command = {
   data: { name: string; toJSON: () => unknown };
   execute: (i: ChatInputCommandInteraction) => Promise<void>;
+  // support both legacy and new names so all modules work
   autocomplete?: (i: AutocompleteInteraction) => Promise<void>;
+  autocomplete2?: (i: AutocompleteInteraction) => Promise<void>;
   handleComponent?: (i: Interaction) => Promise<boolean>;
+  handleComponent2?: (i: Interaction) => Promise<boolean>;
 };
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
@@ -32,6 +35,10 @@ commands.set(balanceCmd.data.name, balanceCmd as unknown as Command);
 commands.set(auditCmd.data.name, auditCmd as unknown as Command);
 
 async function registerCommands() {
+  // Resolve the application ID from the logged-in client
+  const appId = client.application?.id ?? client.user?.id;
+  if (!appId) throw new Error('Unable to resolve application ID from client');
+
   const rest = new REST({ version: '10' }).setToken(CONFIG.token);
   const payload = [
     gameCmd.data.toJSON(),
@@ -39,55 +46,58 @@ async function registerCommands() {
     balanceCmd.data.toJSON(),
     auditCmd.data.toJSON(),
   ];
+
   if (CONFIG.devGuildId) {
-    await rest.put(
-      Routes.applicationGuildCommands(client.application?.id ?? '0', CONFIG.devGuildId),
-      { body: payload },
-    );
+    await rest.put(Routes.applicationGuildCommands(appId, CONFIG.devGuildId), { body: payload });
     console.log('✓ Registered guild commands (dev)');
   } else {
-    await rest.put(Routes.applicationCommands(client.application?.id ?? '0'), { body: payload });
+    await rest.put(Routes.applicationCommands(appId), { body: payload });
     console.log('✓ Registered global commands');
   }
 }
 
-// Use clientReady (ready is deprecated in v15)
+// Use clientReady (future-proof for djs v15)
 client.once('clientReady', async () => {
   console.log(`Logged in as ${client.user?.tag}`);
-  await registerCommands();
+  try {
+    await registerCommands();
+  } catch (e) {
+    console.error('Failed to register commands:', e);
+  }
 });
 
 client.on('interactionCreate', async (interaction) => {
-  // Autocomplete
-  if (interaction.isAutocomplete()) {
-    const cmd = commands.get(interaction.commandName);
-    if (cmd?.autocomplete) {
-      try {
-        await cmd.autocomplete(interaction);
-      } catch (e) {
-        console.error(e);
+  try {
+    if (interaction.isAutocomplete()) {
+      const cmd = commands.get(interaction.commandName);
+      if (cmd?.autocomplete) await cmd.autocomplete(interaction);
+      else if (cmd?.autocomplete2) await cmd.autocomplete2(interaction);
+      return;
+    }
+
+    // Component / modal handlers — try each module, stop when one returns true
+    if (
+      interaction.isRepliable() &&
+      (interaction.isButton() || interaction.isModalSubmit() || interaction.isAnySelectMenu?.())
+    ) {
+      for (const cmd of commands.values()) {
+        if (cmd.handleComponent && (await cmd.handleComponent(interaction))) return;
+        if (cmd.handleComponent2 && (await cmd.handleComponent2(interaction))) return;
       }
     }
-    return;
-  }
 
-  // Component / Modal handlers
-  if (await (tokenCmd.handleComponent?.(interaction) ?? Promise.resolve(false))) return;
-  if (await (gameCmd.handleComponent?.(interaction) ?? Promise.resolve(false))) return;
-
-  // Slash commands
-  if (!interaction.isChatInputCommand()) return;
-  const cmd = commands.get(interaction.commandName);
-  if (!cmd) return;
-  try {
+    // Slash commands
+    if (!interaction.isChatInputCommand()) return;
+    const cmd = commands.get(interaction.commandName);
+    if (!cmd) return;
     await cmd.execute(interaction);
   } catch (e) {
     console.error(e);
     const opts = { content: 'Error executing command.', flags: MessageFlags.Ephemeral as number };
-    if (interaction.deferred || interaction.replied) {
-      await interaction.followUp(opts);
-    } else {
-      await interaction.reply(opts);
+    if (interaction.isRepliable()) {
+      if (interaction.deferred || interaction.replied)
+        await interaction.followUp(opts).catch(() => {});
+      else await interaction.reply(opts).catch(() => {});
     }
   }
 });

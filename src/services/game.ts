@@ -18,9 +18,9 @@ export function deleteGame(guildId: string, gameId: number): void {
 }
 
 export function listGames(guildId: string): GameRow[] {
-  return db.prepare(`SELECT * FROM games WHERE guildId = ? AND isActive = 1 ORDER BY name`).all(
-    guildId,
-  ) as GameRow[];
+  return db
+    .prepare(`SELECT * FROM games WHERE guildId = ? AND isActive = 1 ORDER BY name`)
+    .all(guildId) as GameRow[];
 }
 
 export function getGameById(guildId: string, id: number): GameRow | undefined {
@@ -30,10 +30,9 @@ export function getGameById(guildId: string, id: number): GameRow | undefined {
 }
 
 export function getGameByName(guildId: string, name: string): GameRow | undefined {
-  return db.prepare(`SELECT * FROM games WHERE guildId = ? AND name = ?`).get(
-    guildId,
-    name,
-  ) as GameRow | undefined;
+  return db.prepare(`SELECT * FROM games WHERE guildId = ? AND name = ?`).get(guildId, name) as
+    | GameRow
+    | undefined;
 }
 
 /** Case-insensitive name match or numeric ID */

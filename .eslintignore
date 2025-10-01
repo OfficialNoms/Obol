@@ -1,0 +1,7 @@
+# .eslintignore
+dist/
+node_modules/
+*.d.ts
+# build artifacts
+coverage/
+.tmp/

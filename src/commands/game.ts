@@ -11,13 +11,7 @@ import {
   Interaction,
   MessageFlags,
 } from 'discord.js';
-import {
-  createGame,
-  deleteGame,
-  getGameById,
-  listGames,
-  updateSettings,
-} from '../services/game';
+import { createGame, deleteGame, getGameById, listGames, updateSettings } from '../services/game';
 import { ok, err } from '../ui/embeds';
 import { isBotAdmin } from '../permissions';
 import { CONFIG } from '../config';
@@ -172,7 +166,10 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     }
 
     if (key === 'grantRoles' || key === 'managerRoles') {
-      const roleIds = value.split(',').map((s) => s.trim()).filter(Boolean);
+      const roleIds = value
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
       updateSettings(interaction.guild.id, id, { [key]: roleIds } as any)!;
       await interaction.reply({
         embeds: [ok('Updated roles', `\`${key}\` = ${roleIds.map((r) => `<@&${r}>`).join(', ')}`)],
@@ -184,7 +181,10 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     if (key === 'logChannel') {
       const chId = value === 'null' ? null : value;
       if (chId && !interaction.guild.channels.cache.has(chId)) {
-        await interaction.reply({ embeds: [err('Channel not found')], flags: MessageFlags.Ephemeral });
+        await interaction.reply({
+          embeds: [err('Channel not found')],
+          flags: MessageFlags.Ephemeral,
+        });
         return;
       }
       updateSettings(interaction.guild.id, id, { logChannelId: chId });
