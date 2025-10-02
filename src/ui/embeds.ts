@@ -1,5 +1,5 @@
 // src/ui/embeds.ts
-import { APIEmbed, Colors, EmbedBuilder, User } from 'discord.js';
+import { APIEmbed, Colors, EmbedBuilder, User, EmbedFooterOptions } from 'discord.js';
 
 export function ok(title: string, description?: string): EmbedBuilder {
   return base().setTitle(`✅ ${title}`).setColor(Colors.Green).setDescription(description ?? '');
@@ -46,7 +46,7 @@ export function mutationEmbed(opts: {
 }
 
 /** Subtle gray footer payload helper for pagination and meta text */
-export function grayFooter(text: string): APIEmbed['footer'] {
+export function grayFooter(text: string): EmbedFooterOptions {
   return { text };
 }
 

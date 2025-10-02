@@ -1,15 +1,18 @@
+// src/commands/audit.ts
 import {
   ActionRowBuilder,
   ButtonBuilder,
   ButtonInteraction,
   ButtonStyle,
   ChatInputCommandInteraction,
+  GuildMember,
+  MessageFlags,
   SlashCommandBuilder,
   userMention,
 } from 'discord.js';
 import { ok, err, grayFooter } from '../ui/embeds';
-import { isBotAdmin, isGameManager } from '../permissions';
-import { getGameById, listGames } from '../services/game';
+import { isBotAdmin, isBotManager, isGameManager } from '../permissions';
+import { getGameById } from '../services/game';
 import { listTransactionsPaged, type AuditFilters, type AuditAction } from '../services/audit';
 import { CONFIG } from '../config';
 
@@ -22,11 +25,13 @@ type State = {
 };
 const STATES = new Map<string, { state: State; expiresAt: number }>();
 const TTL_MS = 10 * 60 * 1000;
+
 function putState(s: State): string {
   const token = Math.random().toString(36).slice(2, 10);
   STATES.set(token, { state: s, expiresAt: Date.now() + TTL_MS });
   return token;
 }
+
 function getState(token: string): State | null {
   const s = STATES.get(token);
   if (!s) return null;
@@ -36,6 +41,7 @@ function getState(token: string): State | null {
   }
   return s.state;
 }
+
 setInterval(() => {
   const now = Date.now();
   for (const [k, v] of STATES) if (v.expiresAt < now) STATES.delete(k);
@@ -67,23 +73,32 @@ export const data = new SlashCommandBuilder()
   );
 
 export async function execute(interaction: ChatInputCommandInteraction) {
+  if (!interaction.inGuild() || !interaction.guild) {
+    await interaction.reply({ embeds: [err('Guild-only command')], flags: MessageFlags.Ephemeral });
+    return;
+  }
+  const member = interaction.member as GuildMember;
   const guildId = interaction.guildId!;
   const limit = interaction.options.getInteger('limit') ?? 10;
   const gameId = interaction.options.getInteger('game') ?? undefined;
   const target = interaction.options.getUser('member') ?? undefined;
   const action = (interaction.options.getString('action') as AuditAction | null) ?? undefined;
 
-  // Permission gate: bot admin or game manager
-  let canView = isBotAdmin(interaction.member!, CONFIG.botAdminRoleIds);
+  // Permission gate
+  let canView = isBotAdmin(member, CONFIG.botAdminRoleIds) || isBotManager(member);
   let gameName = 'All games';
   if (!canView && gameId != null) {
     const game = getGameById(guildId, gameId);
-    if (!game) return interaction.reply({ embeds: [err('Game not found')], flags: 64 });
-    canView = isGameManager(interaction.member!, game, CONFIG.botAdminRoleIds);
+    if (!game)
+      return interaction.reply({ embeds: [err('Game not found')], flags: MessageFlags.Ephemeral });
+    canView = isGameManager(member, game, CONFIG.botAdminRoleIds);
     gameName = game.name;
   }
   if (!canView)
-    return interaction.reply({ embeds: [err('You are not allowed to view audit')], flags: 64 });
+    return interaction.reply({
+      embeds: [err('You must be a Bot Admin/Manager or a Game Manager to view audit logs.')],
+      flags: MessageFlags.Ephemeral,
+    });
 
   const filters: AuditFilters = {
     guildId,
@@ -103,19 +118,20 @@ export async function execute(interaction: ChatInputCommandInteraction) {
   return interaction.reply({
     embeds: [renderAudit(page, gameName, limit, target?.id ?? null, action ?? null)],
     components: [pagerRow(token, page)],
-    flags: 64,
+    flags: MessageFlags.Ephemeral,
   });
 }
 
-export async function handleComponent2(inter: ButtonInteraction): Promise<boolean> {
+export async function handleComponent(inter: ButtonInteraction): Promise<boolean> {
   if (!inter.customId.startsWith('audit:')) return false;
-  const [, token, dir] = inter.customId.split(':'); // audit:<token>:prev|next|refresh
+  const [, token, dir] = inter.customId.split(':');
+  if (!token) return true; // Safety check
+
   const state = getState(token);
   if (!state) {
     await inter.update({
       embeds: [err('This view expired. Run /audit again.')],
       components: [],
-      flags: 64,
     });
     return true;
   }
@@ -143,7 +159,7 @@ export async function handleComponent2(inter: ButtonInteraction): Promise<boolea
 
   const gameName =
     filters.gameId != null
-      ? (getGameById(filters.guildId, filters.gameId)?.name ?? `Game ${filters.gameId}`)
+      ? getGameById(filters.guildId, filters.gameId)?.name ?? `Game ${filters.gameId}`
       : 'All games';
 
   await inter.update({
@@ -151,7 +167,6 @@ export async function handleComponent2(inter: ButtonInteraction): Promise<boolea
       renderAudit(page, gameName, limit, filters.targetUserId ?? null, filters.action ?? null),
     ],
     components: [pagerRow(token, page)],
-    flags: 64,
   });
 
   return true;
@@ -191,9 +206,9 @@ function renderAudit(
       : page.items.map((t) => {
           const tgt = userMention(t.targetUserId);
           const delta = t.delta >= 0 ? `+${t.delta}` : `${t.delta}`;
-          const note = t.note ? ` — ${t.note}` : '';
-          const when = `<t:${Math.floor(t.ts / 1000)}:R>`;
-          return `#${t.id} • **${t.action} ${t.amount}** (${delta}) → **${t.afterBalance}** for ${tgt} ${when}${note}`;
+          const note = t.reason ? ` — ${t.reason}` : '';
+          const when = `<t:${t.ts}:R>`;
+          return `#${t.id} • **${t.action} ${t.amount}** (${delta}) → **${t.after}** for ${tgt} ${when}${note}`;
         });
 
   const filterBits = [

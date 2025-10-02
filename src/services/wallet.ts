@@ -228,3 +228,22 @@ export function listTransactions(opts: {
     )
     .all(...params) as TxRow[];
 }
+
+/** Fetch all wallets with a balance > 0 for a guild, joined with game info. */
+export function listAllWalletsForGuild(guildId: string): {
+  userId: string;
+  balance: number;
+  gameName: string;
+}[] {
+  return db
+    .prepare(
+      `
+    SELECT w.userId, w.balance, g.name as gameName
+    FROM wallets w
+    JOIN games g ON g.id = w.gameId
+    WHERE w.guildId = ? AND w.balance > 0 AND g.isActive = 1
+    ORDER BY g.name, w.balance DESC
+  `,
+    )
+    .all(guildId) as { userId: string; balance: number; gameName: string }[];
+}

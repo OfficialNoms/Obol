@@ -21,6 +21,11 @@ export type WalletRow = {
   balance: number;
 };
 
+export type GuildConfigRow = {
+  guildId: string;
+  manager_role_ids: string; // JSON array
+};
+
 const dbDir = path.dirname(CONFIG.databasePath);
 if (!fs.existsSync(dbDir)) fs.mkdirSync(dbDir, { recursive: true });
 
@@ -48,7 +53,6 @@ db.exec(`
     UNIQUE (guildId, gameId, userId)
   );
 
-  -- Auditable per-action log
   CREATE TABLE IF NOT EXISTS transactions (
     id INTEGER PRIMARY KEY,
     ts INTEGER NOT NULL DEFAULT (strftime('%s','now')),
@@ -65,9 +69,32 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS idx_tx_game_ts   ON transactions (guildId, gameId, ts DESC);
   CREATE INDEX IF NOT EXISTS idx_tx_target_ts ON transactions (guildId, targetUserId, ts DESC);
+
+  CREATE TABLE IF NOT EXISTS guild_config (
+    guildId TEXT PRIMARY KEY,
+    manager_role_ids TEXT NOT NULL DEFAULT '[]'
+  );
 `);
 
 export function inTx<T>(fn: () => T): T {
   const tx = db.transaction(fn);
   return tx();
+}
+
+// --- Guild Config Helpers ---
+export function getGuildConfig(guildId: string): { managerRoleIds: string[] } {
+  const row = db.prepare(`SELECT manager_role_ids FROM guild_config WHERE guildId = ?`).get(guildId) as { manager_role_ids: string } | undefined;
+  if (!row) return { managerRoleIds: [] };
+  try {
+    return { managerRoleIds: JSON.parse(row.manager_role_ids) };
+  } catch {
+    return { managerRoleIds: [] };
+  }
+}
+
+export function setGuildConfig(guildId: string, settings: { managerRoleIds: string[] }): void {
+  db.prepare(
+    `INSERT INTO guild_config (guildId, manager_role_ids) VALUES (?, ?)
+     ON CONFLICT(guildId) DO UPDATE SET manager_role_ids = excluded.manager_role_ids`
+  ).run(guildId, JSON.stringify(settings.managerRoleIds));
 }

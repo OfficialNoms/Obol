@@ -1,0 +1,284 @@
+<%- include('partials/header'); %>
+
+<%
+  // Helper for creating custom, stylable dropdowns with Alpine.js
+  const createSelect = (label, name, items, selectedId, placeholder = '-- None --', itemPrefix = '') => {
+    const selectedItem = items.find(item => String(item.id) === String(selectedId));
+    const selectedText = selectedItem ? itemPrefix + selectedItem.name : placeholder;
+    const escapeJS = (str) => String(str).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+
+    const itemsHtml = items.map(item => {
+      const itemText = itemPrefix + item.name;
+      const isSelectedClass = String(selectedId) === String(item.id) ? 'font-semibold' : '';
+      return `
+        <li
+          @click="selected='${escapeJS(item.id)}'; selectedText='${escapeJS(itemText)}'; open=false"
+          class="text-gray-200 relative cursor-pointer select-none py-2 pl-3 pr-9 hover:bg-brand-600"
+        >
+          <span class="block truncate ${isSelectedClass}">${escapeJS(itemText)}</span>
+        </li>
+      `;
+    }).join('');
+
+    return `
+      <div x-data="{ open: false, selected: '${escapeJS(selectedId || '')}', selectedText: '${escapeJS(selectedText)}' }" @click.outside="open = false">
+        <label class="block text-sm font-medium leading-6 text-gray-300">${label}</label>
+        <input type="hidden" name="${name}" x-model="selected">
+        <div class="relative mt-2">
+          <button type="button" @click="open = !open" class="relative w-full cursor-pointer rounded-md bg-white/5 py-1.5 pl-3 pr-10 text-left text-white shadow-sm ring-1 ring-inset ring-white/10 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-brand-500 sm:text-sm sm:leading-6">
+            <span class="block truncate" x-text="selectedText"></span>
+            <span class="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2">
+              <svg class="h-5 w-5 text-gray-400" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 3a.75.75 0 01.53.22l3.5 3.5a.75.75 0 01-1.06 1.06L10 4.81 7.03 7.78a.75.75 0 01-1.06-1.06l3.5-3.5A.75.75 0 0110 3zm-3.72 9.28a.75.75 0 011.06 0L10 15.19l2.97-2.97a.75.75 0 111.06 1.06l-3.5 3.5a.75.75 0 01-1.06 0l-3.5-3.5a.75.75 0 010-1.06z" clip-rule="evenodd" /></svg>
+            </span>
+          </button>
+          <ul x-show="open" x-transition class="absolute z-10 mt-1 max-h-60 w-full overflow-auto rounded-md bg-bg-light py-1 text-base shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none sm:text-sm" style="display:none;">
+            <li @click="selected=''; selectedText='${escapeJS(placeholder)}'; open=false" class="text-gray-200 relative cursor-pointer select-none py-2 pl-3 pr-9 hover:bg-brand-600">
+              <span class="block truncate">${escapeJS(placeholder)}</span>
+            </li>
+            ${itemsHtml}
+          </ul>
+        </div>
+      </div>
+    `;
+  }
+%>
+
+<div class="flex justify-between items-center mb-6">
+  <h2 class="text-3xl font-bold">Manage: <%= guild.name %></h2>
+  <a href="/dashboard" class="text-sm font-semibold text-gray-400 hover:text-white">&larr; Back to Dashboard</a>
+</div>
+
+<% if (hasGuildAdminPerms) { %>
+<div class="bg-bg-light p-6 rounded-lg border border-gray-700 mb-8">
+    <h3 class="text-xl font-semibold mb-4">Guild-Wide Settings</h3>
+    <form action="/guild/<%= guild.id %>/config" method="POST">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <div x-data="multiSelect(<%= JSON.stringify(roles) %>, <%= JSON.stringify(guildConfig.managerRoleIds || []) %>)">
+            <label class="block text-sm font-medium leading-6 text-white">Bot Manager Roles</label>
+            <p class="text-xs text-gray-400 mb-2">Users with these roles can create, delete, and configure all games in this server.</p>
+            <select name="manager_role_ids" multiple class="hidden" x-ref="select">
+                <% roles.forEach(r => { %><option value="<%= r.id %>"><%= r.name %></option><% }); %>
+            </select>
+            <div x-ref="tagsContainer" class="flex flex-wrap gap-2 p-2 min-h-[42px] mt-1 rounded-md border-0 bg-white/5 ring-1 ring-inset ring-white/10"></div>
+            <div x-ref="rolesList" class="mt-2 max-h-48 overflow-y-auto rounded-md border border-gray-700">
+                <% roles.forEach(r => { %>
+                    <div class="px-3 py-2 cursor-pointer hover:bg-brand-600" data-id="<%= r.id %>" @click="toggleRole('<%= r.id %>')"><%= r.name %></div>
+                <% }); %>
+            </div>
+            <button type="submit" class="mt-4 rounded-md bg-gray-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-gray-500">Save Guild Settings</button>
+        </div>
+    </form>
+</div>
+<% } %>
+
+<div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+
+  <div class="space-y-8">
+    <div class="bg-bg-light p-6 rounded-lg border border-gray-700">
+      <h3 class="text-xl font-semibold mb-4">Create New Game</h3>
+      <form action="/guild/<%= guild.id %>/games/create" method="POST" class="space-y-4">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <div>
+          <label for="name" class="block text-sm font-medium leading-6 text-gray-300">Game Name</label>
+          <p class="text-xs text-gray-400 mb-2">The public name for this token set (e.g., "Dragonfall").</p>
+          <input type="text" name="name" id="name" required class="form-input mt-1 block w-full rounded-md border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-white/10 focus:ring-2 focus:ring-inset focus:ring-brand-500 sm:text-sm sm:leading-6">
+        </div>
+        <div>
+          <label for="description" class="block text-sm font-medium leading-6 text-gray-300">Description (Optional)</label>
+          <p class="text-xs text-gray-400 mb-2">A short, optional description for the game.</p>
+          <textarea name="description" id="description" rows="2" class="form-textarea mt-1 block w-full rounded-md border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-white/10 focus:ring-2 focus:ring-inset focus:ring-brand-500 sm:text-sm sm:leading-6"></textarea>
+        </div>
+        <button type="submit" class="rounded-md bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-500">Create Game</button>
+      </form>
+    </div>
+
+    <div>
+      <h3 class="text-xl font-semibold mb-4">Existing Games</h3>
+      <div class="space-y-4">
+        <% if (games.length > 0) { %>
+          <% games.forEach(game => { %>
+            <div class="bg-bg-light p-4 rounded-lg border border-gray-700" x-data="{ open: false }">
+              <div class="flex justify-between items-center">
+                <div>
+                  <h4 class="font-bold"><%= game.name %></h4>
+                  <p class="text-xs text-gray-400 font-mono">ID: <%= game.id %></p>
+                </div>
+                <div class="flex items-center gap-x-4">
+                    <button @click="open = !open" class="text-sm text-gray-400 hover:text-white">Settings</button>
+                    <form action="/guild/<%= guild.id %>/games/<%= game.id %>/delete" method="POST" onsubmit="return confirm('Are you sure you want to delete this game and all associated wallets?');">
+                        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                        <button type="submit" class="text-red-400 hover:text-red-300 text-sm">Delete</button>
+                    </form>
+                </div>
+              </div>
+              <form action="/guild/<%= guild.id %>/games/<%= game.id %>/settings" method="POST" class="mt-4 space-y-4 border-t border-gray-700/50 pt-4" x-show="open" x-transition>
+                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                <% const settings = JSON.parse(game.settingsJson); %>
+
+                <div x-data="multiSelect(<%= JSON.stringify(roles) %>, <%= JSON.stringify(settings.managerRoleIds || []) %>)">
+                    <label class="block text-sm font-medium leading-6 text-white">Game Manager Roles</label>
+                    <p class="text-xs text-gray-400 mb-2">Users with these roles can set balances and manage this specific game.</p>
+                    <select name="managerRoleIds" multiple class="hidden" x-ref="select">
+                        <% roles.forEach(r => { %><option value="<%= r.id %>"><%= r.name %></option><% }); %>
+                    </select>
+                    <div x-ref="tagsContainer" class="flex flex-wrap gap-2 p-2 min-h-[42px] mt-1 rounded-md border-0 bg-white/5 ring-1 ring-inset ring-white/10"></div>
+                    <div x-ref="rolesList" class="mt-2 max-h-48 overflow-y-auto rounded-md border border-gray-700">
+                        <% roles.forEach(r => { %>
+                            <div class="px-3 py-2 cursor-pointer hover:bg-brand-600" data-id="<%= r.id %>" @click="toggleRole('<%= r.id %>')"><%= r.name %></div>
+                        <% }); %>
+                    </div>
+                </div>
+                
+                <div x-data="multiSelect(<%= JSON.stringify(roles) %>, <%= JSON.stringify(settings.grantRoleIds || []) %>)">
+                    <label class="block text-sm font-medium leading-6 text-white">Granter Roles</label>
+                    <p class="text-xs text-gray-400 mb-2">Users with these roles can grant or remove tokens for this specific game.</p>
+                    <select name="grantRoleIds" multiple class="hidden" x-ref="select">
+                        <% roles.forEach(r => { %><option value="<%= r.id %>"><%= r.name %></option><% }); %>
+                    </select>
+                    <div x-ref="tagsContainer" class="flex flex-wrap gap-2 p-2 min-h-[42px] mt-1 rounded-md border-0 bg-white/5 ring-1 ring-inset ring-white/10"></div>
+                    <div x-ref="rolesList" class="mt-2 max-h-48 overflow-y-auto rounded-md border border-gray-700">
+                        <% roles.forEach(r => { %>
+                            <div class="px-3 py-2 cursor-pointer hover:bg-brand-600" data-id="<%= r.id %>" @click="toggleRole('<%= r.id %>')"><%= r.name %></div>
+                        <% }); %>
+                    </div>
+                </div>
+
+                <div>
+                    <%- createSelect('Log Channel', 'logChannelId', channels, settings.logChannelId, '-- None --', '#') %>
+                    <p class="text-xs text-gray-400 mt-2">Channel where token actions for this specific game will be logged.</p>
+                </div>
+                <button type="submit" class="rounded-md bg-gray-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-gray-500">Save Game Settings</button>
+              </form>
+            </div>
+          <% }); %>
+        <% } else { %>
+          <p class="text-gray-400">No games created yet.</p>
+        <% } %>
+      </div>
+    </div>
+  </div>
+
+  <div class="space-y-8">
+      <div class="bg-bg-light p-6 rounded-lg border border-gray-700">
+        <h3 class="text-xl font-semibold mb-4">Token Actions</h3>
+        <form action="/guild/<%= guild.id %>/tokens/mutate" method="POST" class="space-y-4">
+           <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+           <div><%- createSelect('Game', 'gameId', games, games[0]?.id, '-- Select a Game --') %></div>
+           <div><%- createSelect('Action', 'action', [{id: 'grant', name: 'Grant'}, {id: 'remove', name: 'Remove'}, {id: 'set', name: 'Set'}], 'grant', '-- Select an Action --') %></div>
+           <div>
+                <label for="userId" class="block text-sm font-medium leading-6 text-gray-300">User ID</label>
+                <input type="text" name="userId" id="userId" required placeholder="Enter Discord User ID" class="form-input mt-1 block w-full rounded-md border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-white/10 focus:ring-2 focus:ring-inset focus:ring-brand-500">
+           </div>
+           <div>
+                <label for="amount" class="block text-sm font-medium leading-6 text-gray-300">Amount</label>
+                <input type="number" name="amount" id="amount" required min="0" class="form-input mt-1 block w-full rounded-md border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-white/10 focus:ring-2 focus:ring-inset focus:ring-brand-500">
+           </div>
+            <div>
+                <label for="reason" class="block text-sm font-medium leading-6 text-gray-300">Reason (Optional)</label>
+                <input type="text" name="reason" id="reason" class="form-input mt-1 block w-full rounded-md border-0 bg-white/5 py-1.5 text-white shadow-sm ring-1 ring-inset ring-white/10 focus:ring-2 focus:ring-inset focus:ring-brand-500">
+           </div>
+           <button type="submit" class="rounded-md bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-500">Execute Action</button>
+        </form>
+      </div>
+  </div>
+</div>
+
+<div class="mt-12" x-data="{ open: true }">
+    <div @click="open = !open" class="flex items-center justify-between cursor-pointer">
+        <h3 class="text-2xl font-bold">Token Balances</h3>
+        <svg class="w-6 h-6 text-gray-400 transition-transform" :class="{ 'rotate-180': open }" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+        </svg>
+    </div>
+    
+    <div class="mt-4 space-y-6" x-show="open" x-transition>
+        <% if (Object.keys(walletsByGame).length > 0) { %>
+            <% for (const gameName in walletsByGame) { %>
+                <div class="bg-bg-light p-4 rounded-lg border border-gray-700">
+                    <h4 class="font-semibold text-lg mb-3"><%= gameName %></h4>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full">
+                            <thead class="bg-black/20">
+                                <tr>
+                                    <th class="p-3 text-sm font-semibold tracking-wide text-left">Member</th>
+                                    <th class="p-3 text-sm font-semibold tracking-wide text-left">User ID</th>
+                                    <th class="p-3 text-sm font-semibold tracking-wide text-left">Balance</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-700/50">
+                                <% walletsByGame[gameName].forEach(wallet => { %>
+                                    <tr>
+                                        <td class="p-3 text-sm text-gray-300"><%= wallet.userName %></td>
+                                        <td class="p-3 text-sm text-gray-400 font-mono"><%= wallet.userId %></td>
+                                        <td class="p-3 text-sm font-semibold text-white"><%= wallet.balance %></td>
+                                    </tr>
+                                <% }); %>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            <% } %>
+        <% } else { %>
+            <div class="bg-bg-light p-4 rounded-lg border border-gray-700">
+                <p class="text-gray-400">No users have token balances yet.</p>
+            </div>
+        <% } %>
+    </div>
+</div>
+
+<script>
+document.addEventListener('alpine:init', () => {
+  Alpine.data('multiSelect', (allRoles, initialSelected) => ({
+    allRoles: allRoles,
+    selected: initialSelected,
+    init() {
+      this.$nextTick(() => this.updateUI());
+    },
+    toggleRole(roleId) {
+      const index = this.selected.indexOf(roleId);
+      if (index === -1) {
+        this.selected.push(roleId);
+      } else {
+        this.selected.splice(index, 1);
+      }
+      this.updateUI();
+    },
+    removeRole(roleId) {
+      this.selected = this.selected.filter(id => id !== roleId);
+      this.updateUI();
+    },
+    updateUI() {
+      // Update hidden select
+      Array.from(this.$refs.select.options).forEach(opt => {
+        opt.selected = this.selected.includes(opt.value);
+      });
+      // Update tags
+      this.$refs.tagsContainer.innerHTML = '';
+      if (this.selected.length === 0) {
+        this.$refs.tagsContainer.innerHTML = '<span class="text-gray-500 text-sm px-1">No roles selected</span>';
+      }
+      this.selected.forEach(id => {
+        const role = this.allRoles.find(r => r.id === id);
+        if (role) {
+          const tag = document.createElement('div');
+          tag.className = 'flex items-center gap-x-2 bg-brand-600/50 text-yellow-200 text-sm font-medium px-2 py-1 rounded';
+          tag.innerHTML = `<span>${role.name}</span><button type="button" class="text-yellow-300 hover:text-white" @click="removeRole('${id}')">&times;</button>`;
+          this.$refs.tagsContainer.appendChild(tag);
+        }
+      });
+      // Update list styles
+      Array.from(this.$refs.rolesList.children).forEach(roleDiv => {
+          const isSelected = this.selected.includes(roleDiv.dataset.id);
+          roleDiv.dataset.selected = isSelected;
+          if (isSelected) {
+              roleDiv.classList.add('bg-brand-500/50');
+          } else {
+              roleDiv.classList.remove('bg-brand-500/50');
+          }
+      });
+    }
+  }));
+});
+</script>
+
+<%- include('partials/footer'); %>

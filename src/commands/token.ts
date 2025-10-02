@@ -17,8 +17,6 @@ import {
   TextInputStyle,
   Interaction,
   MessageFlags,
-  TextChannel,
-  GuildTextBasedChannel,
 } from 'discord.js';
 import { resolveGameFlexible, listGames, getGameById } from '../services/game';
 import {
@@ -32,8 +30,69 @@ import {
 import { mutationEmbed, ok, err, auditLogEmbed } from '../ui/embeds';
 import { CONFIG } from '../config';
 import { isGameManager, isGranter } from '../permissions';
+import { postLog } from '../services/logging';
 
-// ---- Slash command with existing subs + interactive panel ----
+// ---- Panel state ----
+type PanelState = { gameId?: number; userId?: string };
+const panel = new Map<string, PanelState>();
+
+const CUSTOM = {
+  gameSelect: 'obol:panel:game',
+  userSelect: 'obol:panel:user',
+  grantBtn: 'obol:panel:grant',
+  removeBtn: 'obol:panel:remove',
+  setBtn: 'obol:panel:set',
+  grantModal: 'obol:modal:grant',
+  removeModal: 'obol:modal:remove',
+  setModal: 'obol:modal:set',
+};
+
+function gameSelectRow(guildId: string) {
+  const games = listGames(guildId).slice(0, 25);
+  const menu = new StringSelectMenuBuilder()
+    .setCustomId(CUSTOM.gameSelect)
+    .setPlaceholder('Select game…')
+    .addOptions(games.map((g) => new StringSelectMenuOptionBuilder().setLabel(g.name).setValue(String(g.id))));
+  return new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(menu);
+}
+function userSelectRow() {
+  const menu = new UserSelectMenuBuilder().setCustomId(CUSTOM.userSelect).setPlaceholder('Pick member…');
+  return new ActionRowBuilder<UserSelectMenuBuilder>().addComponents(menu);
+}
+function actionButtonsRow() {
+  const grant = new ButtonBuilder().setCustomId(CUSTOM.grantBtn).setLabel('Grant').setStyle(ButtonStyle.Success);
+  const remove = new ButtonBuilder().setCustomId(CUSTOM.removeBtn).setLabel('Remove').setStyle(ButtonStyle.Danger);
+  const set = new ButtonBuilder().setCustomId(CUSTOM.setBtn).setLabel('Set').setStyle(ButtonStyle.Primary);
+  return new ActionRowBuilder<ButtonBuilder>().addComponents(grant, remove, set);
+}
+
+// Modal with context
+function amountModal(customId: string, title: string, gameName: string, targetLabel?: string) {
+  const fullTitle = targetLabel ? `${title} — ${gameName} → ${targetLabel}` : `${title} — ${gameName}`;
+  const modal = new ModalBuilder().setCustomId(customId).setTitle(fullTitle);
+
+  const amount = new TextInputBuilder()
+    .setCustomId('amount')
+    .setLabel('Amount')
+    .setPlaceholder('Enter an integer (e.g. 5)')
+    .setRequired(true)
+    .setStyle(TextInputStyle.Short);
+
+  const reason = new TextInputBuilder()
+    .setCustomId('reason')
+    .setLabel('Reason/Notes')
+    .setPlaceholder('Why? (optional)')
+    .setRequired(false)
+    .setStyle(TextInputStyle.Paragraph);
+
+  modal.addComponents(
+    new ActionRowBuilder<TextInputBuilder>().addComponents(amount),
+    new ActionRowBuilder<TextInputBuilder>().addComponents(reason),
+  );
+  return modal;
+}
+
+// ---- Slash command ----
 export const data = new SlashCommandBuilder()
   .setName('token')
   .setDescription('Grant / manage per-game RP tokens')
@@ -133,91 +192,6 @@ export async function autocomplete(interaction: AutocompleteInteraction) {
   );
 }
 
-// ---- Panel state ----
-type PanelState = { gameId?: number; userId?: string };
-const panel = new Map<string, PanelState>();
-
-const CUSTOM = {
-  gameSelect: 'obol:panel:game',
-  userSelect: 'obol:panel:user',
-  grantBtn: 'obol:panel:grant',
-  removeBtn: 'obol:panel:remove',
-  setBtn: 'obol:panel:set',
-  grantModal: 'obol:modal:grant',
-  removeModal: 'obol:modal:remove',
-  setModal: 'obol:modal:set',
-};
-
-function gameSelectRow(guildId: string) {
-  const games = listGames(guildId).slice(0, 25);
-  const menu = new StringSelectMenuBuilder()
-    .setCustomId(CUSTOM.gameSelect)
-    .setPlaceholder('Select game…')
-    .addOptions(games.map((g) => new StringSelectMenuOptionBuilder().setLabel(g.name).setValue(String(g.id))));
-  return new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(menu);
-}
-function userSelectRow() {
-  const menu = new UserSelectMenuBuilder().setCustomId(CUSTOM.userSelect).setPlaceholder('Pick member…');
-  return new ActionRowBuilder<UserSelectMenuBuilder>().addComponents(menu);
-}
-function actionButtonsRow() {
-  const grant = new ButtonBuilder().setCustomId(CUSTOM.grantBtn).setLabel('Grant').setStyle(ButtonStyle.Success);
-  const remove = new ButtonBuilder().setCustomId(CUSTOM.removeBtn).setLabel('Remove').setStyle(ButtonStyle.Danger);
-  const set = new ButtonBuilder().setCustomId(CUSTOM.setBtn).setLabel('Set').setStyle(ButtonStyle.Primary);
-  return new ActionRowBuilder<ButtonBuilder>().addComponents(grant, remove, set);
-}
-
-// Modal with context
-function amountModal(customId: string, title: string, gameName: string, targetLabel?: string) {
-  const fullTitle = targetLabel ? `${title} — ${gameName} → ${targetLabel}` : `${title} — ${gameName}`;
-  const modal = new ModalBuilder().setCustomId(customId).setTitle(fullTitle);
-
-  const amount = new TextInputBuilder()
-    .setCustomId('amount')
-    .setLabel('Amount')
-    .setPlaceholder('Enter an integer (e.g. 5)')
-    .setRequired(true)
-    .setStyle(TextInputStyle.Short);
-
-  const reason = new TextInputBuilder()
-    .setCustomId('reason')
-    .setLabel('Reason/Notes')
-    .setPlaceholder('Why? (optional)')
-    .setRequired(false)
-    .setStyle(TextInputStyle.Paragraph);
-
-  modal.addComponents(
-    new ActionRowBuilder<TextInputBuilder>().addComponents(amount),
-    new ActionRowBuilder<TextInputBuilder>().addComponents(reason),
-  );
-  return modal;
-}
-
-/** Robustly retrieve logChannelId from a game row */
-function getLogChannelId(game: any): string | null {
-  try {
-    const parsed = game?.settingsJson ? JSON.parse(game.settingsJson) : null;
-    return parsed?.logChannelId ?? null;
-  } catch {
-    return null;
-  }
-}
-
-/** Post a log embed to the game's configured log channel (if any) */
-async function postLog(interaction: Interaction, game: any, embed: ReturnType<typeof auditLogEmbed>) {
-  const chId = getLogChannelId(game);
-  if (!chId || !interaction.guild) return;
-  const ch = interaction.guild.channels.cache.get(chId) ?? (await interaction.guild.channels.fetch(chId).catch(() => null));
-  if (!ch) return;
-  // Only try text-ish channels
-  if (!('send' in (ch as GuildTextBasedChannel))) return;
-  try {
-    await (ch as TextChannel).send({ embeds: [embed] });
-  } catch {
-    // ignore (missing perms, etc.)
-  }
-}
-
 // ---- Slash executor ----
 export async function execute(interaction: ChatInputCommandInteraction) {
   if (!interaction.inGuild() || !interaction.guild) {
@@ -248,9 +222,7 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     return;
   }
 
-  const member: GuildMember =
-    interaction.guild.members.resolve(interaction.user.id) ??
-    (await interaction.guild.members.fetch(interaction.user.id));
+  const member = interaction.member as GuildMember;
   const manager = isGameManager(member, game, CONFIG.botAdminRoleIds);
   const granter = isGranter(member, game, CONFIG.botAdminRoleIds);
 
@@ -294,8 +266,8 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     });
 
     // async log (best-effort)
-    postLog(
-      interaction,
+    await postLog(
+      interaction.guild,
       game,
       auditLogEmbed({
         action: sub,
@@ -344,8 +316,8 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     });
 
     // async log
-    postLog(
-      interaction,
+    await postLog(
+      interaction.guild,
       game,
       auditLogEmbed({
         action: 'set',
@@ -461,9 +433,7 @@ export async function handleComponent(interaction: Interaction): Promise<boolean
       return true;
     }
 
-    const member: GuildMember =
-      interaction.guild.members.resolve(interaction.user.id) ??
-      (await interaction.guild.members.fetch(interaction.user.id));
+    const member = interaction.member as GuildMember;
     const manager = isGameManager(member, game, CONFIG.botAdminRoleIds);
     const granter = isGranter(member, game, CONFIG.botAdminRoleIds);
 
@@ -491,8 +461,8 @@ export async function handleComponent(interaction: Interaction): Promise<boolean
           embeds: [mutationEmbed({ action: 'grant', gameName: game.name, target, amount, before, after, note: reason })],
           flags: MessageFlags.Ephemeral,
         });
-        postLog(
-          interaction,
+        await postLog(
+          interaction.guild,
           game,
           auditLogEmbed({
             action: 'grant',
@@ -518,8 +488,8 @@ export async function handleComponent(interaction: Interaction): Promise<boolean
           embeds: [mutationEmbed({ action: 'remove', gameName: game.name, target, amount, before, after, note: reason })],
           flags: MessageFlags.Ephemeral,
         });
-        postLog(
-          interaction,
+        await postLog(
+          interaction.guild,
           game,
           auditLogEmbed({
             action: 'remove',
@@ -545,8 +515,8 @@ export async function handleComponent(interaction: Interaction): Promise<boolean
           embeds: [mutationEmbed({ action: 'set', gameName: game.name, target, amount, before, after, note: reason })],
           flags: MessageFlags.Ephemeral,
         });
-        postLog(
-          interaction,
+        await postLog(
+          interaction.guild,
           game,
           auditLogEmbed({
             action: 'set',

@@ -11,12 +11,15 @@ import {
   AutocompleteInteraction,
   Interaction,
   MessageFlags,
+  Events,
 } from 'discord.js';
 import { CONFIG } from './config';
 import * as gameCmd from './commands/game';
 import * as tokenCmd from './commands/token';
 import * as balanceCmd from './commands/balance';
 import * as auditCmd from './commands/audit';
+import * as configCmd from './commands/config'; // Import the new command
+import { startWebServer } from './web/server';
 
 type Command = {
   data: { name: string; toJSON: () => unknown };
@@ -25,25 +28,21 @@ type Command = {
   handleComponent?: (i: Interaction) => Promise<boolean>;
 };
 
-const client = new Client({ intents: [GatewayIntentBits.Guilds] });
+const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers] });
 
 const commands = new Collection<string, Command>();
 commands.set(gameCmd.data.name, gameCmd as unknown as Command);
 commands.set(tokenCmd.data.name, tokenCmd as unknown as Command);
 commands.set(balanceCmd.data.name, balanceCmd as unknown as Command);
 commands.set(auditCmd.data.name, auditCmd as unknown as Command);
+commands.set(configCmd.data.name, configCmd as unknown as Command); // Add the new command
 
 async function registerCommands() {
   const appId = client.application?.id ?? client.user?.id;
   if (!appId) throw new Error('Unable to resolve application ID from client');
 
   const rest = new REST({ version: '10' }).setToken(CONFIG.token);
-  const payload = [
-    gameCmd.data.toJSON(),
-    tokenCmd.data.toJSON(),
-    balanceCmd.data.toJSON(),
-    auditCmd.data.toJSON(),
-  ];
+  const payload = commands.map((cmd) => cmd.data.toJSON());
 
   if (CONFIG.devGuildId) {
     await rest.put(Routes.applicationGuildCommands(appId, CONFIG.devGuildId), { body: payload });
@@ -54,16 +53,17 @@ async function registerCommands() {
   }
 }
 
-client.once('clientReady', async () => {
+client.once(Events.ClientReady, async () => {
   console.log(`Logged in as ${client.user?.tag}`);
   try {
     await registerCommands();
+    startWebServer(client);
   } catch (e) {
-    console.error('Failed to register commands:', e);
+    console.error('Failed during startup:', e);
   }
 });
 
-client.on('interactionCreate', async (interaction) => {
+client.on(Events.InteractionCreate, async (interaction) => {
   try {
     if (interaction.isAutocomplete()) {
       const cmd = commands.get(interaction.commandName);
@@ -73,7 +73,9 @@ client.on('interactionCreate', async (interaction) => {
 
     if (
       interaction.isRepliable() &&
-      (interaction.isButton() || interaction.isModalSubmit() || (interaction as any).isAnySelectMenu?.())
+      (interaction.isButton() ||
+        interaction.isModalSubmit() ||
+        (interaction as any).isAnySelectMenu?.())
     ) {
       for (const cmd of commands.values()) {
         if (cmd.handleComponent && (await cmd.handleComponent(interaction))) return;
@@ -88,7 +90,8 @@ client.on('interactionCreate', async (interaction) => {
     console.error(e);
     const opts = { content: 'Error executing command.', flags: MessageFlags.Ephemeral as number };
     if (interaction.isRepliable()) {
-      if (interaction.deferred || interaction.replied) await interaction.followUp(opts).catch(() => {});
+      if (interaction.deferred || interaction.replied)
+        await interaction.followUp(opts).catch(() => {});
       else await interaction.reply(opts).catch(() => {});
     }
   }

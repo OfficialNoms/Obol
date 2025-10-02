@@ -13,7 +13,7 @@ import {
 } from 'discord.js';
 import { createGame, deleteGame, getGameById, listGames, updateSettings } from '../services/game';
 import { ok, err } from '../ui/embeds';
-import { isBotAdmin } from '../permissions';
+import { isBotAdmin, isBotManager } from '../permissions';
 import { CONFIG } from '../config';
 
 const CUSTOM = {
@@ -91,13 +91,14 @@ export async function execute(interaction: ChatInputCommandInteraction) {
     return;
   }
 
-  const member: GuildMember =
-    interaction.guild.members.resolve(interaction.user.id) ??
-    (await interaction.guild.members.fetch(interaction.user.id));
+  const member = interaction.member as GuildMember;
 
-  const admin = isBotAdmin(member, CONFIG.botAdminRoleIds);
-  if (!admin) {
-    await interaction.reply({ embeds: [err('Admins only')], flags: MessageFlags.Ephemeral });
+  const hasPermission = isBotAdmin(member, CONFIG.botAdminRoleIds) || isBotManager(member);
+  if (!hasPermission) {
+    await interaction.reply({
+      embeds: [err('You must be a Bot Admin or Manager to use this command.')],
+      flags: MessageFlags.Ephemeral,
+    });
     return;
   }
 
@@ -211,11 +212,9 @@ export async function handleComponent(interaction: Interaction): Promise<boolean
       return true;
     }
 
-    const member: GuildMember =
-      interaction.guild.members.resolve(interaction.user.id) ??
-      (await interaction.guild.members.fetch(interaction.user.id));
-    if (!isBotAdmin(member, CONFIG.botAdminRoleIds)) {
-      await interaction.reply({ embeds: [err('Admins only')], flags: MessageFlags.Ephemeral });
+    const member = interaction.member as GuildMember;
+    if (!isBotAdmin(member, CONFIG.botAdminRoleIds) && !isBotManager(member)) {
+      await interaction.reply({ embeds: [err('Admins or Managers only')], flags: MessageFlags.Ephemeral });
       return true;
     }
 

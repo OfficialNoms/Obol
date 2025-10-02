@@ -20,9 +20,9 @@ export interface AuditRow {
   action: AuditAction;
   amount: number;
   delta: number;
-  beforeBalance: number;
-  afterBalance: number;
-  note: string | null;
+  before: number;
+  after: number;
+  reason: string | null;
 }
 
 export interface Page {
@@ -74,7 +74,7 @@ export function listTransactionsPaged(
   }
 
   const sql = `
-    SELECT id, ts, guildId, gameId, actorUserId, targetUserId, action, amount, delta, beforeBalance, afterBalance, note
+    SELECT id, ts, guildId, gameId, actorUserId, targetUserId, action, amount, delta, before, after, reason
     FROM transactions
     WHERE ${where.join(' AND ')}
     ORDER BY ${order}
@@ -109,7 +109,7 @@ export function listTransactionsPaged(
   // If direction was backward (newer), "prev" continues newer from first.id
   // Also infer opposite side availability based on provided cursors.
   if (opts.direction === 'forward') {
-    hasPrev = !!opts.afterId || !!(items.length && items[0].id < Number.MAX_SAFE_INTEGER); // best-effort
+    hasPrev = !!opts.afterId || !!(first && first.id < Number.MAX_SAFE_INTEGER); // best-effort
   } else {
     hasNext = !!opts.beforeId || hasNext;
     hasPrev = items.length > 0 ? true : !!opts.afterId;
