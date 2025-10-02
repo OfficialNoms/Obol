@@ -1,0 +1,31 @@
+<%- include('partials/header'); %>
+
+<div class="prose prose-invert max-w-none">
+    <h1>Help & FAQ</h1>
+    <p class="text-gray-400">Find answers to common questions about setting up and using Obol.</p>
+
+    <h2>First-Time Setup</h2>
+    <ol>
+        <li><strong>Invite the Bot:</strong> Use the bot invite link to add Obol to your Discord server.</li>
+        <li><strong>Log in to the Web Panel:</strong> Use the "Login" button to access the admin dashboard.</li>
+        <li><strong>Configure Manager Roles:</strong> Use <code>/config set manager_roles @YourRole</code> to give staff access to the panel and commands.</li>
+        <li><strong>Create a Game:</strong> Use the <code>/game create</code> command or the web panel to create your first token set.</li>
+        <li><strong>Set Game Permissions:</strong> Configure which roles can grant or manage tokens for each game in the web panel.</li>
+    </ol>
+    
+    <h2>Frequently Asked Questions</h2>
+    <h4>How do I check my token balance?</h4>
+    <p>Use the <code>/balance</code> command in any channel. It will show you a private list of all your token balances for every game in the server.</p>
+
+    <h4>How do I grant tokens to a user?</h4>
+    <p>If you have the "Granter" role for a game, you can use the <code>/token grant</code> command or the "Token Actions" form in the web panel.</p>
+
+    <h4>What's the difference between a "Bot Manager" and a "Game Manager"?</h4>
+    <p>
+        <strong>Bot Managers</strong> are configured per-server (with <code>/config</code>) and can create, delete, and manage ALL games in that server. They are server-level administrators for the bot.<br>
+        <strong>Game Managers</strong> are configured per-game. They can't create new games, but they can manage the settings and set token balances for the specific games they are assigned to.
+    </p>
+
+</div>
+
+<%- include('partials/footer'); %>

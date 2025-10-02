@@ -2,7 +2,7 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import type { Client } from 'discord.js';
+import type { Client, GuildMember } from 'discord.js';
 import { ChannelType, PermissionFlagsBits } from 'discord.js';
 import cookieParser from 'cookie-parser';
 import express from 'express';
@@ -136,6 +136,10 @@ export function startWebServer(client: Client) {
     res.render('landing');
   });
 
+  app.get('/privacy', (req, res) => res.render('privacy'));
+  app.get('/terms', (req, res) => res.render('terms'));
+  app.get('/help', (req, res) => res.render('help'));
+
   app.get('/login', passport.authenticate('discord'));
   app.get(
     new URL(CONFIG.oauthCallbackUrl).pathname,
@@ -169,24 +173,29 @@ export function startWebServer(client: Client) {
     const u = req.user as OAuthUser;
 
     if (!client.guilds.cache.has(guildId)) {
-        return res.status(403).render('error', { error: 'Access Denied. The bot is not in this server.' });
+      return res.status(403).render('error', { error: 'Access Denied. The bot is not in this server.' });
     }
 
     const guild = await client.guilds.fetch(guildId);
     const member = await guild.members.fetch(u.id).catch(() => null);
 
     if (!member) {
-        return res.status(403).render('error', { error: 'Could not verify your membership in this server.' });
+      return res.status(403).render('error', { error: 'Could not verify your membership in this server.' });
     }
-    
+
     const gAuth = u.guilds.find((g) => g.id === guildId);
     const hasGuildAdminPerms = gAuth ? canManageGuild(gAuth.permissions) : false;
     const isManager = isBotManager(member);
 
     if (!hasGuildAdminPerms && !isManager) {
-      return res.status(403).render('error', { error: 'Access Denied. You must have "Manage Server" permissions or a configured Bot Manager role to access this page.' });
+      return res
+        .status(403)
+        .render('error', {
+          error:
+            'Access Denied. You must have "Manage Server" permissions or a configured Bot Manager role to access this page.',
+        });
     }
-    
+
     const roles = (await guild.roles.fetch()).map((r) => ({ id: r.id, name: r.name }));
     const channels = (await guild.channels.fetch())
       .filter((c) => c?.type === ChannelType.GuildText)
@@ -197,7 +206,9 @@ export function startWebServer(client: Client) {
     const allWallets = listAllWalletsForGuild(guildId);
     const userIds = [...new Set(allWallets.map((w) => w.userId))];
     const members = userIds.length > 0 ? await guild.members.fetch({ user: userIds }) : new Map();
-    const memberMap = new Map(members.map((m) => [m.id, m.displayName]));
+    
+    // Convert the members Collection (a Map) to an array to use .map()
+    const memberMap = new Map(Array.from(members.values()).map((m: GuildMember) => [m.id, m.displayName]));
 
     const walletsByGame = allWallets.reduce(
       (acc, wallet) => {
@@ -221,7 +232,7 @@ export function startWebServer(client: Client) {
       channels,
       guildConfig,
       walletsByGame,
-      hasGuildAdminPerms, // Pass the permission flag to the template
+      hasGuildAdminPerms,
       csrfToken: req.csrfToken(),
     });
   });
@@ -230,10 +241,10 @@ export function startWebServer(client: Client) {
   app.post('/guild/:guildId/config', ensureAuth, async (req, res) => {
     const { guildId } = req.params;
     if (!guildId) return res.status(400).render('error', { error: 'Guild ID is missing.' });
-    
+
     const member = await client.guilds.fetch(guildId).then((g) => g.members.fetch(req.user!.id));
     if (!member.permissions.has(PermissionFlagsBits.ManageGuild)) {
-        return res.status(403).render('error', { error: 'You must have "Manage Server" permissions.' });
+      return res.status(403).render('error', { error: 'You must have "Manage Server" permissions.' });
     }
 
     const { manager_role_ids } = req.body;
@@ -250,24 +261,26 @@ export function startWebServer(client: Client) {
   app.post('/guild/:guildId/games/create', ensureAuth, async (req, res) => {
     const { guildId } = req.params;
     if (!guildId) return res.status(400).render('error', { error: 'Guild ID is missing.' });
-    
+
     const member = await client.guilds.fetch(guildId).then((g) => g.members.fetch(req.user!.id));
     if (!isBotAdmin(member, CONFIG.botAdminRoleIds) && !isBotManager(member)) {
-        return res.status(403).render('error', { error: 'You must be a Bot Admin or Manager to create games.' });
+      return res
+        .status(403)
+        .render('error', { error: 'You must be a Bot Admin or Manager to create games.' });
     }
 
     const { name, description } = req.body;
     if (name) createGame(guildId, name, description);
     res.redirect(`/guild/${guildId}`);
   });
-  
+
   app.post('/guild/:guildId/games/:gameId/delete', ensureAuth, async (req, res) => {
     const { guildId, gameId } = req.params;
     if (!guildId) return res.status(400).render('error', { error: 'Guild ID is missing.' });
 
     const member = await client.guilds.fetch(guildId).then((g) => g.members.fetch(req.user!.id));
     if (!isBotAdmin(member, CONFIG.botAdminRoleIds) && !isBotManager(member)) {
-        return res
+      return res
         .status(403)
         .render('error', { error: 'You must be a Bot Admin or Manager to delete games.' });
     }
@@ -282,7 +295,7 @@ export function startWebServer(client: Client) {
     const game = getGameById(guildId, Number(gameId));
     const member = await client.guilds.fetch(guildId).then((g) => g.members.fetch(req.user!.id));
     if (!game || (!isBotAdmin(member, CONFIG.botAdminRoleIds) && !isBotManager(member))) {
-        return res.status(403).render('error', { error: 'Access Denied.' });
+      return res.status(403).render('error', { error: 'Access Denied.' });
     }
 
     const { managerRoleIds, grantRoleIds, logChannelId } = req.body;
@@ -301,14 +314,14 @@ export function startWebServer(client: Client) {
   app.post('/guild/:guildId/tokens/mutate', ensureAuth, async (req, res) => {
     const { guildId } = req.params;
     if (!guildId) return res.status(400).render('error', { error: 'Guild ID is missing.' });
-    
+
     const guild = await client.guilds.fetch(guildId);
     const member = await guild.members.fetch(req.user!.id);
     const { gameId, action, userId, amount, reason } = req.body;
     const numAmount = Number(amount);
 
     if (!gameId || !action || !userId || !Number.isInteger(numAmount)) {
-        return res.status(400).render('error', { error: 'Invalid input for token action.' });
+      return res.status(400).render('error', { error: 'Invalid input for token action.' });
     }
 
     const game = getGameById(guildId, Number(gameId));
@@ -318,7 +331,7 @@ export function startWebServer(client: Client) {
 
     const canManage = isGameManager(member, game, CONFIG.botAdminRoleIds);
     const canGrant = isGranter(member, game, CONFIG.botAdminRoleIds);
-    
+
     if (action === 'set' && !canManage) {
       return res.status(403).render('error', { error: 'You must be a Game Manager to set balances.' });
     }
@@ -327,35 +340,35 @@ export function startWebServer(client: Client) {
         .status(403)
         .render('error', { error: 'You do not have permission to grant or remove tokens for this game.' });
     }
-    
+
     let beforeAfter;
     try {
-        if (action === 'grant') {
-            beforeAfter = grantTokens(guildId, Number(gameId), req.user!.id, userId, numAmount, reason);
-        } else if (action === 'remove') {
-            beforeAfter = removeTokens(guildId, Number(gameId), req.user!.id, userId, numAmount, reason);
-        } else if (action === 'set') {
-            beforeAfter = setTokens(guildId, Number(gameId), req.user!.id, userId, numAmount, reason);
-        } else {
-            throw new Error('Invalid action.');
-        }
+      if (action === 'grant') {
+        beforeAfter = grantTokens(guildId, Number(gameId), req.user!.id, userId, numAmount, reason);
+      } else if (action === 'remove') {
+        beforeAfter = removeTokens(guildId, Number(gameId), req.user!.id, userId, numAmount, reason);
+      } else if (action === 'set') {
+        beforeAfter = setTokens(guildId, Number(gameId), req.user!.id, userId, numAmount, reason);
+      } else {
+        throw new Error('Invalid action.');
+      }
 
-        await postLog(
-          guild,
-          game,
-          auditLogEmbed({
-            action,
-            gameName: game.name,
-            actorUserId: req.user!.id,
-            targetUserId: userId,
-            amount: numAmount,
-            before: beforeAfter.before,
-            after: beforeAfter.after,
-            reason,
-          }),
-        );
+      await postLog(
+        guild,
+        game,
+        auditLogEmbed({
+          action,
+          gameName: game.name,
+          actorUserId: req.user!.id,
+          targetUserId: userId,
+          amount: numAmount,
+          before: beforeAfter.before,
+          after: beforeAfter.after,
+          reason,
+        }),
+      );
     } catch (e: any) {
-        return res.status(500).render('error', { error: `Action failed: ${e.message}` });
+      return res.status(500).render('error', { error: `Action failed: ${e.message}` });
     }
 
     res.redirect(`/guild/${guildId}`);

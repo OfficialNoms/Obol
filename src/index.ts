@@ -18,7 +18,9 @@ import * as gameCmd from './commands/game';
 import * as tokenCmd from './commands/token';
 import * as balanceCmd from './commands/balance';
 import * as auditCmd from './commands/audit';
-import * as configCmd from './commands/config'; // Import the new command
+import * as configCmd from './commands/config';
+import * as aboutCmd from './commands/about'; // New
+import * as helpCmd from './commands/help';   // New
 import { startWebServer } from './web/server';
 
 type Command = {
@@ -35,7 +37,9 @@ commands.set(gameCmd.data.name, gameCmd as unknown as Command);
 commands.set(tokenCmd.data.name, tokenCmd as unknown as Command);
 commands.set(balanceCmd.data.name, balanceCmd as unknown as Command);
 commands.set(auditCmd.data.name, auditCmd as unknown as Command);
-commands.set(configCmd.data.name, configCmd as unknown as Command); // Add the new command
+commands.set(configCmd.data.name, configCmd as unknown as Command);
+commands.set(aboutCmd.data.name, aboutCmd as unknown as Command); // New
+commands.set(helpCmd.data.name, helpCmd as unknown as Command);   // New
 
 async function registerCommands() {
   const appId = client.application?.id ?? client.user?.id;
