@@ -18,7 +18,7 @@ import {
   Interaction,
   MessageFlags,
 } from 'discord.js';
-import { resolveGameFlexible, listGames, getGameById } from '../services/game.js';
+import { resolveGameFlexible, listGames, getGameById } from '../services/game';
 import {
   getBalance,
   ensureWallet,
@@ -26,11 +26,11 @@ import {
   grantTokens,
   removeTokens,
   setTokens,
-} from '../services/wallet.js';
-import { mutationEmbed, ok, err, auditLogEmbed } from '../ui/embeds.js';
+} from '../services/wallet';
+import { mutationEmbed, ok, err, auditLogEmbed } from '../ui/embeds';
 import { CONFIG } from '../config.js';
-import { isGameManager, isGranter } from '../permissions.js';
-import { postLog } from '../services/logging.js';
+import { isGameManager, isGranter } from '../permissions';
+import { postLog } from '../services/logging';
 
 // ---- Panel state ----
 type PanelState = { gameId?: number; userId?: string };

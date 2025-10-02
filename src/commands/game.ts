@@ -11,10 +11,10 @@ import {
   Interaction,
   MessageFlags,
 } from 'discord.js';
-import { createGame, deleteGame, getGameById, listGames, updateSettings } from '../services/game.js';
-import { ok, err } from '../ui/embeds.js';
-import { isBotAdmin, isBotManager } from '../permissions.js';
-import { CONFIG } from '../config.js';
+import { createGame, deleteGame, getGameById, listGames, updateSettings } from '../services/game';
+import { ok, err } from '../ui/embeds';
+import { isBotAdmin, isBotManager } from '../permissions';
+import { CONFIG } from '../config';
 
 const CUSTOM = {
   createGameModal: 'obol:modal:create-game',

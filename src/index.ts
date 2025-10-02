@@ -13,15 +13,15 @@ import {
   MessageFlags,
   Events,
 } from 'discord.js';
-import { CONFIG } from './config.js';
-import * as gameCmd from './commands/game.js';
-import * as tokenCmd from './commands/token.js';
-import * as balanceCmd from './commands/balance.js';
-import * as auditCmd from './commands/audit.js';
-import * as configCmd from './commands/config.js';
-import * as aboutCmd from './commands/about.js';
-import * as helpCmd from './commands/help.js';
-import { startWebServer } from './web/server.js';
+import { CONFIG } from './config';
+import * as gameCmd from './commands/game';
+import * as tokenCmd from './commands/token';
+import * as balanceCmd from './commands/balance';
+import * as auditCmd from './commands/audit';
+import * as configCmd from './commands/config';
+import * as aboutCmd from './commands/about';
+import * as helpCmd from './commands/help';
+import { startWebServer } from './web/server';
 
 type Command = {
   data: { name: string; toJSON: () => unknown };

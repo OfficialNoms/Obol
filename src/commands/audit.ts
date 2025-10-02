@@ -10,11 +10,11 @@ import {
   SlashCommandBuilder,
   userMention,
 } from 'discord.js';
-import { ok, err, grayFooter } from '../ui/embeds.js';
-import { isBotAdmin, isBotManager, isGameManager } from '../permissions.js';
-import { getGameById } from '../services/game.js';
-import { listTransactionsPaged, type AuditFilters, type AuditAction } from '../services/audit.js';
-import { CONFIG } from '../config.js';
+import { ok, err, grayFooter } from '../ui/embeds';
+import { isBotAdmin, isBotManager, isGameManager } from '../permissions';
+import { getGameById } from '../services/game';
+import { listTransactionsPaged, type AuditFilters, type AuditAction } from '../services/audit';
+import { CONFIG } from '../config';
 
 type State = {
   filters: AuditFilters;

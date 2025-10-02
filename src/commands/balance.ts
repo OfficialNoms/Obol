@@ -1,7 +1,7 @@
 // src/commands/balance.ts
 import { SlashCommandBuilder, ChatInputCommandInteraction, MessageFlags } from 'discord.js';
-import { listUserBalances } from '../services/wallet';
-import { ok } from '../ui/embeds';
+import { listUserBalances } from '../services/wallet.js';
+import { ok } from '../ui/embeds.js';
 
 export const data = new SlashCommandBuilder()
   .setName('balance')
