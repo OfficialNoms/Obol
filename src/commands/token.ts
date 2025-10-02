@@ -28,7 +28,7 @@ import {
   setTokens,
 } from '../services/wallet';
 import { mutationEmbed, ok, err, auditLogEmbed } from '../ui/embeds';
-import { CONFIG } from '../config.js';
+import { CONFIG } from '../config';
 import { isGameManager, isGranter } from '../permissions';
 import { postLog } from '../services/logging';
 

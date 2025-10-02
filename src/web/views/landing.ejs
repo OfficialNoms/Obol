@@ -1,13 +1,81 @@
 <%- include('partials/header'); %>
-<div class="text-center">
-  <h1 class="text-4xl font-bold tracking-tight text-white sm:text-6xl">
-    Obol Token Manager
-  </h1>
-  <p class="mt-6 text-lg leading-8 text-gray-300">
-    A simple web panel for managing your Discord RP tokens.
-  </p>
-  <div class="mt-10 flex items-center justify-center gap-x-6">
-    <a href="/login" class="rounded-md bg-brand-600 px-3.5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-brand-500">Get Started &rarr;</a>
+
+<div class="relative isolate overflow-hidden">
+  <div class="mx-auto max-w-4xl pt-10 pb-16 sm:pt-12 sm:pb-20">
+    <div class="text-center">
+      <h1 class="text-4xl font-bold tracking-tight text-white sm:text-6xl">
+        The Ultimate Token Manager for Your Discord Server
+      </h1>
+      <p class="mt-6 text-lg leading-8 text-gray-300">
+        Obol is a powerful, lightweight bot for roleplay and community servers.
+        Create, manage, and audit virtual economies with an intuitive web panel and simple commands.
+      </p>
+      <div class="mt-10 flex items-center justify-center gap-x-6">
+        <a
+          href="/login"
+          class="rounded-md bg-brand-600 px-4 py-3 text-sm font-semibold text-white shadow-sm hover:bg-brand-500"
+        >
+          Add to Your Server &rarr;
+        </a>
+        <a href="/help" class="text-sm font-semibold leading-6 text-gray-300 hover:text-white"
+          >Learn more <span aria-hidden="true">→</span></a
+        >
+      </div>
+    </div>
+  </div>
+
+  <div class="mt-8 flow-root">
+    <div class="mx-auto max-w-7xl">
+      <div class="grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3">
+        
+        <div class="bg-bg-light/50 p-6 rounded-lg border border-gray-700/50">
+          <h3 class="text-lg font-semibold text-white">Multi-Economy Support</h3>
+          <p class="mt-2 text-sm text-gray-400">
+            Create separate token economies for different games or activities within the same server,
+            each with its own managers and settings.
+          </p>
+        </div>
+
+        <div class="bg-bg-light/50 p-6 rounded-lg border border-gray-700/50">
+          <h3 class="text-lg font-semibold text-white">Powerful Web Panel</h3>
+          <p class="mt-2 text-sm text-gray-400">
+            Manage everything from your browser. A secure, user-friendly dashboard for creating
+            games, setting roles, and editing balances.
+          </p>
+        </div>
+
+        <div class="bg-bg-light/50 p-6 rounded-lg border border-gray-700/50">
+          <h3 class="text-lg font-semibold text-white">Granular Permissions</h3>
+          <p class="mt-2 text-sm text-gray-400">
+            Assign "Bot Manager" roles for server-wide control and "Game Manager" or "Granter"
+            roles for specific token sets.
+          </p>
+        </div>
+
+        <div class="bg-bg-light/50 p-6 rounded-lg border border-gray-700/50">
+            <h3 class="text-lg font-semibold text-white">Full Audit Trail</h3>
+            <p class="mt-2 text-sm text-gray-400">
+              Every token transaction is logged. Use the `/audit` command or the web panel to see who did what, to whom, and when.
+            </p>
+        </div>
+        
+        <div class="bg-bg-light/50 p-6 rounded-lg border border-gray-700/50">
+            <h3 class="text-lg font-semibold text-white">Simple for Users</h3>
+            <p class="mt-2 text-sm text-gray-400">
+              Users can check all their balances with a single, private `/balance` command, keeping channel spam to a minimum.
+            </p>
+        </div>
+
+        <div class="bg-bg-light/50 p-6 rounded-lg border border-gray-700/50">
+            <h3 class="text-lg font-semibold text-white">Reliable Hosting</h3>
+            <p class="mt-2 text-sm text-gray-400">
+              Obol is a centrally hosted service, meaning you don't have to worry about uptime or maintenance. Just invite and go.
+            </p>
+        </div>
+
+      </div>
+    </div>
   </div>
 </div>
+
 <%- include('partials/footer'); %>

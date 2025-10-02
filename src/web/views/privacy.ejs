@@ -1,0 +1,36 @@
+<%- include('partials/header'); %>
+
+<div class="prose prose-invert max-w-none">
+    <h1>Privacy Policy</h1>
+    <p class="text-gray-400">Last updated: October 2, 2025</p>
+
+    <p>This policy covers the Obol Discord bot and its associated web panel ("the Service").</p>
+
+    <h3>Data We Collect</h3>
+    <ul>
+        <li><strong>Discord User Information:</strong> Your Discord user ID, username, and avatar are collected when you interact with the bot or log into the web panel. Your roles and permissions within a server are used for authorization checks.</li>
+        <li><strong>Discord Guild Information:</strong> We store the ID of servers where the bot is used, along with role and channel IDs you configure for bot operations.</li>
+        <li><strong>Service Data:</strong> We store all data you create through the Service, including game names, token balances per user per game, and a log of all token transactions (who did what, to whom, when, and why).</li>
+    </ul>
+
+    <h3>How We Use Data</h3>
+    <ul>
+        <li>To provide the core functionality of the bot, which is tracking and managing token balances.</li>
+        <li>To authenticate you to the web panel and ensure you only have access to servers and actions you are permitted to see and perform.</li>
+        <li>To create an audit log of all token mutations for server accountability.</li>
+    </ul>
+
+    <h3>Data Storage and Security</h3>
+    <p>All service-related data is stored in a SQLite database file on the same server that hosts the bot. We take reasonable measures to protect this data, but no system is perfectly secure.</p>
+
+    <h3>Data Sharing</h3>
+    <p>We do not share your data with any third parties, except as required by law.</p>
+
+    <h3>Your Rights</h3>
+    <p>As your data is stored within your Discord server's context, most data removal can be handled by server administrators (e.g., deleting a game, which cascades and deletes associated balances and transactions). For complete removal requests, please contact the bot operator.</p>
+
+    <h3>Contact</h3>
+    <p>For any questions about this privacy policy, please contact the bot operator.</p>
+</div>
+
+<%- include('partials/footer'); %>
