@@ -13,18 +13,18 @@ import { Strategy as DiscordStrategy, type Profile } from 'passport-discord';
 import rateLimit from 'express-rate-limit';
 import csrf from 'tiny-csrf';
 
-import { CONFIG } from '../config.js';
-import { createGame, deleteGame, getGameById, listGames, updateSettings } from '../services/game.js';
+import { CONFIG } from '../config';
+import { createGame, deleteGame, getGameById, listGames, updateSettings } from '../services/game';
 import {
   grantTokens,
   removeTokens,
   setTokens,
   listAllWalletsForGuild,
-} from '../services/wallet.js';
-import { isBotAdmin, isBotManager, isGameManager, isGranter } from '../permissions.js';
-import { postLog } from '../services/logging.js';
-import { auditLogEmbed } from '../ui/embeds.js';
-import { getGuildConfig, setGuildConfig } from '../db.js';
+} from '../services/wallet';
+import { isBotAdmin, isBotManager, isGameManager, isGranter } from '../permissions';
+import { postLog } from '../services/logging';
+import { auditLogEmbed } from '../ui/embeds';
+import { getGuildConfig, setGuildConfig } from '../db';
 
 // --- Types ---
 type OAuthUser = {
@@ -100,7 +100,9 @@ export function startWebServer(client: Client) {
     }),
   );
   app.set('view engine', 'ejs');
-  app.set('views', path.join(__dirname, 'views'));
+  // ** THIS IS THE FIX **
+  // Point to the 'dist/web/views' directory where the templates are copied.
+  app.set('views', path.join(__dirname, 'web', 'views'));
   app.set('trust proxy', 1);
   app.use(express.static(path.resolve(process.cwd(), 'public')));
   app.use(
@@ -207,7 +209,6 @@ export function startWebServer(client: Client) {
     const userIds = [...new Set(allWallets.map((w) => w.userId))];
     const members = userIds.length > 0 ? await guild.members.fetch({ user: userIds }) : new Map();
     
-    // Convert the members Collection (a Map) to an array to use .map()
     const memberMap = new Map(Array.from(members.values()).map((m: GuildMember) => [m.id, m.displayName]));
 
     const walletsByGame = allWallets.reduce(
