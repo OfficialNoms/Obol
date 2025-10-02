@@ -13,18 +13,18 @@ import { Strategy as DiscordStrategy, type Profile } from 'passport-discord';
 import rateLimit from 'express-rate-limit';
 import csrf from 'tiny-csrf';
 
-import { CONFIG } from './config';
-import { createGame, deleteGame, getGameById, listGames, updateSettings } from './services/game';
+import { CONFIG } from '../config';
+import { createGame, deleteGame, getGameById, listGames, updateSettings } from '../services/game';
 import {
   grantTokens,
   removeTokens,
   setTokens,
   listAllWalletsForGuild,
-} from './services/wallet';
-import { isBotAdmin, isBotManager, isGameManager, isGranter } from './permissions';
-import { postLog } from './services/logging';
-import { auditLogEmbed } from './ui/embeds';
-import { getGuildConfig, setGuildConfig } from './db';
+} from '../services/wallet';
+import { isBotAdmin, isBotManager, isGameManager, isGranter } from '../permissions';
+import { postLog } from '../services/logging';
+import { auditLogEmbed } from '../ui/embeds';
+import { getGuildConfig, setGuildConfig } from '../db';
 import pkg from '../../package.json' with { type: 'json' };
 
 // --- Types ---
