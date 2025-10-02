@@ -13,15 +13,15 @@ import {
   MessageFlags,
   Events,
 } from 'discord.js';
-import { CONFIG } from './config';
-import * as gameCmd from './commands/game';
-import * as tokenCmd from './commands/token';
-import * as balanceCmd from './commands/balance';
-import * as auditCmd from './commands/audit';
-import * as configCmd from './commands/config';
-import * as aboutCmd from './commands/about'; // New
-import * as helpCmd from './commands/help';   // New
-import { startWebServer } from './web/server';
+import { CONFIG } from './config.js';
+import * as gameCmd from './commands/game.js';
+import * as tokenCmd from './commands/token.js';
+import * as balanceCmd from './commands/balance.js';
+import * as auditCmd from './commands/audit.js';
+import * as configCmd from './commands/config.js';
+import * as aboutCmd from './commands/about.js';
+import * as helpCmd from './commands/help.js';
+import { startWebServer } from './web/server.js';
 
 type Command = {
   data: { name: string; toJSON: () => unknown };
@@ -38,8 +38,8 @@ commands.set(tokenCmd.data.name, tokenCmd as unknown as Command);
 commands.set(balanceCmd.data.name, balanceCmd as unknown as Command);
 commands.set(auditCmd.data.name, auditCmd as unknown as Command);
 commands.set(configCmd.data.name, configCmd as unknown as Command);
-commands.set(aboutCmd.data.name, aboutCmd as unknown as Command); // New
-commands.set(helpCmd.data.name, helpCmd as unknown as Command);   // New
+commands.set(aboutCmd.data.name, aboutCmd as unknown as Command);
+commands.set(helpCmd.data.name, helpCmd as unknown as Command);
 
 async function registerCommands() {
   const appId = client.application?.id ?? client.user?.id;
